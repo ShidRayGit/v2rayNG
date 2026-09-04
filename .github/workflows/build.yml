@@ -97,7 +97,7 @@ jobs:
           restore-keys: gradle-
 
       - name: ساخت کلید API
-        if: inputs.naran != false
+        if: github.event_name != 'workflow_dispatch' || inputs.naran
         env:
           API_SECRET: ${{ secrets.NARAN_API_SECRET }}
         run: |
@@ -118,7 +118,7 @@ jobs:
           PY
 
       - name: کنار گذاشتن ماژول ناران
-        if: inputs.naran == false
+        if: github.event_name == 'workflow_dispatch' && !inputs.naran
         run: |
           rm -rf V2rayNG/app/src/main/java/com/naran
           echo "ناران کنار گذاشته شد — این یک بیلد پایه است"
@@ -169,11 +169,27 @@ jobs:
 
       - name: تنظیم gradle
         run: |
-          if [ "${{ inputs.naran }}" = "false" ]; then
-            python3 tools/patch_gradle.py
-          else
+          if [ "${{ github.event_name != 'workflow_dispatch' || inputs.naran }}" = "true" ]; then
             python3 tools/patch_gradle.py --deps
             python3 tools/patch_manifest.py
+          else
+            python3 tools/patch_gradle.py
+          fi
+
+      - name: بررسی سلامت ماژول
+        run: |
+          MANIFEST=V2rayNG/app/src/main/AndroidManifest.xml
+          SRC=V2rayNG/app/src/main/java/com/naran/core
+          if grep -q "com.naran.core.ui.NaranActivity" $MANIFEST; then
+            if [ ! -f "$SRC/ui/NaranActivity.kt" ]; then
+              echo "::error::منیفست NaranActivity را صدا می‌زند ولی فایلش نیست"
+              exit 1
+            fi
+            COUNT=$(find $SRC -name "*.kt" | wc -l)
+            echo "ماژول ناران: $COUNT فایل"
+            [ "$COUNT" -ge 10 ] || { echo "::error::فایل‌های ناران ناقص‌اند"; exit 1; }
+          else
+            echo "بیلد پایه — بدون ناران"
           fi
 
       - name: بیلد
