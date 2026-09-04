@@ -46,6 +46,13 @@ class NaranActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
+        // فایل‌های مسیریابی را از APK به app_assets کپی می‌کند. v2rayNG
+        // این را در MainActivity انجام می‌دهد و چون آن را دور زدیم،
+        // هسته geosite.dat را پیدا نمی‌کرد و همان لحظه می‌مرد.
+        runCatching {
+            com.v2ray.ang.handler.SettingsManager.initAssets(this, assets)
+        }.onFailure { NaranLog.e("راه‌اندازی", "کپی فایل‌های مسیریابی ناموفق") }
+
         NaranManager.init(this, BuildConfig.VERSION_NAME)
         NaranServiceState.register(this)
 

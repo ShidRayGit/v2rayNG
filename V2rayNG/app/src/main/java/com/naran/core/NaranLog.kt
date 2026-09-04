@@ -58,9 +58,17 @@ object NaranLog {
         Regex("""\b[A-Za-z0-9+/=_-]{28,}\b""") to "[رشته]",
     )
 
-    /** دامنه‌هایی که پنهان کردنشان فایده ندارد و خواندن لاگ را سخت می‌کند. */
-    private val SAFE = setOf(
-        "gstatic.com", "google.com", "cloudflare.com", "github.com", "localhost"
+    /**
+     * چیزهایی که پنهان کردنشان فایده ندارد و فقط لاگ را ناخوانا می‌کند.
+     *
+     * اسم پکیج و کلاس‌های اندروید حساس نیستند — هر کسی با باز کردن APK
+     * می‌بیندشان. مخفی کردنشان فقط عیب‌یابی را سخت می‌کرد.
+     */
+    private val SAFE = listOf(
+        "gstatic.com", "google.com", "cloudflare.com", "github.com", "localhost",
+        "com.v2ray.ang", "com.naran", "v2ray.ang", "android.", "androidx.",
+        "java.", "kotlin.", "libv2ray.", "go.Universe", "dalvik.", "com.google.",
+        ".dat", ".so", ".apk", ".json", ".java", ".kt", ".xml", ".pem"
     )
 
     // IPv6 با regex شکننده است — شکل فشرده «::» از دستش در می‌رود.
@@ -124,10 +132,20 @@ object NaranLog {
         val proc = Runtime.getRuntime().exec(
             arrayOf("logcat", "-d", "-t", "200", "-v", "brief")
         )
+        // بدون این فیلتر، لاگ پر از رویداد لمس صفحه و GC می‌شود و
+        // خطوطی که واقعاً مهم‌اند لای آن‌ها گم می‌شوند.
+        val keep = listOf("GoLog", "StartCore", "V2Ray", "Xray", "proxyerror", "tun2socks")
+        val drop = listOf("MIUIInput", "AssetManager2", "ImeTracker", "MotionEvent",
+            "GraphicsEnvironment", "nativeloader", "ForceDarkHelper", "DecorView",
+            "ResMonitor", "RENDER_TURBO", "WmSystemUiDebug", "concurrent mark",
+            "MMKV", "hiddenapi", "Binder 0x", "audit(")
+
         proc.inputStream.bufferedReader().useLines { lines ->
-            lines.filter { it.contains("v2ray", true) || it.contains("GoLog", true) }
-                .map { redact(it) }
-                .toList()
+            lines.filter { line ->
+                drop.none { line.contains(it, true) } &&
+                    (keep.any { line.contains(it, true) } ||
+                        line.startsWith("E/") || line.contains(" E/"))
+            }.map { redact(it) }.toList()
         }
     }.getOrDefault(emptyList())
 }
