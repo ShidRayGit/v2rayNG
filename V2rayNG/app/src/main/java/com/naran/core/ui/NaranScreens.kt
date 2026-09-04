@@ -42,7 +42,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * نگاه کنید.
  */
 
-private fun fa(s: Any) = NaranTraffic.fa(s.toString())
+/** ارقام فارسی. چون چند فایل صفحه داریم، internal است نه private. */
+internal fun fa(s: Any) = NaranTraffic.fa(s.toString())
 
 // ────────────────────────── ورود کد ──────────────────────────
 
