@@ -27,6 +27,7 @@ object NaranStore {
     private const val K_LAST_SYNC = "last_sync"
     private const val K_SERVER_SKEW = "server_skew"
     private const val K_MEDIA_BASE = "media_base"
+    private const val K_PUBLIC = "public_configs"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -115,6 +116,26 @@ object NaranStore {
             })
         }
         p().edit().putString(K_ENDPOINTS, arr.toString()).apply()
+    }
+
+    // ── کانفیگ‌های عمومی ──
+
+    fun publicConfigs(): List<NaranPublicConfig> {
+        val raw = p().getString(K_PUBLIC, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull {
+                runCatching { NaranPublicConfig.fromCache(arr.getJSONObject(it)) }.getOrNull()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun savePublicConfigs(list: List<NaranPublicConfig>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it.toJson()) }
+        p().edit().putString(K_PUBLIC, arr.toString()).apply()
     }
 
     // ── تبلیغات و کانال ──

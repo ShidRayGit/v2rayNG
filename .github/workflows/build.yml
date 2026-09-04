@@ -1,29 +1,91 @@
 name: ساخت APK
 
-# بدون لپ‌تاپ: پوش کنید یا از تب Actions دستی اجرا کنید،
-# چند دقیقه بعد APK امضاشده در Artifacts آماده است.
+# v2rayNG بدون دو کتابخانه‌ی بومی بیلد نمی‌شود:
+#   libv2ray.aar         از AndroidLibXrayLite با gomobile
+#   libhev-socks5-tunnel از hev-socks5-tunnel با NDK
+# هر دو اینجا ساخته و کش می‌شوند تا بیلدهای بعدی سریع باشند.
 
 on:
   push:
     branches: [main, master]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      naran:
+        description: 'ماژول ناران را هم بیلد کن'
+        type: boolean
+        default: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: نصب JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: نصب Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '12266719'
+          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+
+      - name: نصب NDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            --install "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: نصب Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'AndroidLibXrayLite/go.mod'
+
+      - name: کش hev-socks5-tunnel
+        id: cache-hevtun
+        uses: actions/cache@v4
+        with:
+          path: libs
+          key: hevtun-${{ runner.os }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}
+
+      - name: ساخت hev-socks5-tunnel
+        if: steps.cache-hevtun.outputs.cache-hit != 'true'
+        run: bash compile-hevtun.sh
+
+      - name: کپی کتابخانه‌ی تونل
+        run: cp -r libs V2rayNG/app/
+
+      - name: کش libv2ray
+        id: cache-xray
+        uses: actions/cache@v4
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: libv2ray-${{ runner.os }}-${{ hashFiles('.git/modules/AndroidLibXrayLite/HEAD') }}
+
+      - name: ساخت libv2ray.aar
+        if: steps.cache-xray.outputs.cache-hit != 'true'
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          cd AndroidLibXrayLite
+          gomobile init
+          go mod tidy -v
+          gomobile bind -v -androidapi 21 -trimpath \
+            -ldflags='-s -w -buildid= -checklinkname=0' ./
+          mkdir -p ../V2rayNG/app/libs
+          cp *.aar ../V2rayNG/app/libs/libv2ray.aar
+          ls -lh ../V2rayNG/app/libs/
 
       - name: کش Gradle
         uses: actions/cache@v4
@@ -34,33 +96,52 @@ jobs:
           key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: نصب NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-
-      - name: ساخت کلید API از secrets
+      - name: ساخت کلید API
+        if: inputs.naran != false
         env:
           API_SECRET: ${{ secrets.NARAN_API_SECRET }}
         run: |
           if [ -z "$API_SECRET" ]; then
-            echo "::error::NARAN_API_SECRET تعریف نشده است"
+            echo "::error::NARAN_API_SECRET تعریف نشده"
             exit 1
           fi
-          python3 tools/gen_secret.py "$API_SECRET" > /tmp/secret.h
+          python3 tools/gen_secret.py "$API_SECRET" | tail -n +2 > /tmp/secret.txt
           python3 - <<'PY'
           import re, pathlib
           src = pathlib.Path("V2rayNG/app/src/main/jni/naran.c")
-          new = pathlib.Path("/tmp/secret.h").read_text()
-          body = src.read_text()
+          block = pathlib.Path("/tmp/secret.txt").read_text().strip()
           body = re.sub(
               r"static const unsigned char SECRET_BYTES\[\] = \{.*?\};",
-              new.split("static const unsigned char", 1)[1].join(
-                  ["static const unsigned char", ""]).strip(),
-              body, flags=re.S)
+              block, src.read_text(), flags=re.S)
           src.write_text(body)
           print("کلید در naran.c نوشته شد")
           PY
+
+      - name: کنار گذاشتن ماژول ناران
+        if: inputs.naran == false
+        run: |
+          rm -rf V2rayNG/app/src/main/java/com/naran
+          echo "ناران کنار گذاشته شد — این یک بیلد پایه است"
+
+      - name: برندینگ — اسم و آیکون
+        if: inputs.naran != false
+        run: |
+          pip install --quiet Pillow
+          RES=V2rayNG/app/src/main/res
+
+          # اسم اپ در همه‌ی زبان‌ها
+          for f in $RES/values*/strings.xml; do
+            [ -f "$f" ] || continue
+            sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">Naran VPN</string>|' "$f"
+          done
+          grep -h 'app_name' $RES/values/strings.xml || true
+
+          # آیکون، اگر لوگویی گذاشته شده باشد
+          if ls branding/logo.* >/dev/null 2>&1; then
+            python3 tools/make_icons.py
+          else
+            echo "لوگویی در branding/ نیست — آیکون پیش‌فرض می‌ماند"
+          fi
 
       - name: بازسازی کیستور
         env:
@@ -90,22 +171,13 @@ jobs:
           KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          if [ "$SIGNED" = "1" ]; then
-            ./gradlew assembleRelease --no-daemon --stacktrace
-          else
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          fi
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: تحویل APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: naran-apk
           path: V2rayNG/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
           retention-days: 30
-
-      - name: انتشار روی تگ
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: V2rayNG/app/build/outputs/apk/**/*.apk
-          generate_release_notes: true

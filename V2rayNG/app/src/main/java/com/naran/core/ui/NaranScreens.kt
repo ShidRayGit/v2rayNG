@@ -265,6 +265,7 @@ fun ConnectScreen(
 @Composable
 fun ServerSheet(
     configs: List<NaranConfig>,
+    publicConfigs: List<NaranPublicConfig>,
     selectedId: Int?,
     onPick: (NaranConfig) -> Unit,
     onAddCode: () -> Unit
@@ -282,7 +283,7 @@ fun ServerSheet(
         )
         Spacer(Modifier.height(16.dp))
 
-        if (configs.isEmpty()) {
+        if (configs.isEmpty() && publicConfigs.isEmpty()) {
             Text(
                 "هنوز سروری ندارید",
                 style = MaterialTheme.typography.bodyMedium,
@@ -297,30 +298,49 @@ fun ServerSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.heightIn(max = 380.dp)
             ) {
-                items(configs, key = { it.id }) { c ->
-                    val on = c.id == selectedId
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(13.dp))
-                            .background(if (on) NaranColors.Raise else NaranColors.Night)
-                            .border(
-                                1.dp,
-                                if (on) NaranColors.GlowDim else NaranColors.Edge,
-                                RoundedCornerShape(13.dp)
+                items(configs, key = { "own-" + it.id }) { c ->
+                    ServerRow(c, c.id == selectedId, null) { onPick(c) }
+                }
+
+                // این بخش فقط وقتی وجود دارد که در پنل کانفیگ عمومی گذاشته
+                // شده باشد. خالی که باشد، هیچ عنوانی هم دیده نمی‌شود.
+                if (publicConfigs.isNotEmpty()) {
+                    item(key = "public-header") {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "اتصال عمومی",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = NaranColors.Glow
                             )
-                            .clickable { onPick(c) }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("${c.flag} ${c.name}",
-                                style = MaterialTheme.typography.titleMedium)
-                            Text(c.location.ifBlank { c.protocol },
-                                style = MaterialTheme.typography.bodySmall)
+                            val soonest = publicConfigs
+                                .filter { it.expiresAt > 0 }
+                                .minOfOrNull { it.expiresAt }
+                            if (soonest != null) {
+                                val left = soonest - (System.currentTimeMillis() +
+                                        NaranStore.serverSkew) / 1000
+                                if (left > 0) {
+                                    Text(
+                                        if (left >= 3600)
+                                            "${fa(left / 3600)} ساعت مانده"
+                                        else "${fa(left / 60)} دقیقه مانده",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
                         }
-                        if (on) Text("فعال", color = NaranColors.Glow, fontSize = 13.sp)
+                    }
+                    items(publicConfigs, key = { "pub-" + it.config.id }) { p ->
+                        ServerRow(
+                            p.config,
+                            p.config.id == selectedId,
+                            "عمومی"
+                        ) { onPick(p.config) }
                     }
                 }
             }
@@ -335,6 +355,53 @@ fun ServerSheet(
                 .fillMaxWidth()
                 .height(48.dp)
         ) { Text("وارد کردن کد جدید", color = NaranColors.Text) }
+    }
+}
+
+@Composable
+private fun ServerRow(
+    c: NaranConfig,
+    selected: Boolean,
+    badge: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(13.dp))
+            .background(if (selected) NaranColors.Raise else NaranColors.Night)
+            .border(
+                1.dp,
+                if (selected) NaranColors.GlowDim else NaranColors.Edge,
+                RoundedCornerShape(13.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("${c.flag} ${c.name}", style = MaterialTheme.typography.titleMedium)
+            Text(
+                c.location.ifBlank { c.protocol },
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (badge != null) {
+                Text(
+                    badge,
+                    fontSize = 12.sp,
+                    color = NaranColors.Glow,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(NaranColors.Glow.copy(alpha = 0.13f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            if (selected) Text("فعال", color = NaranColors.Glow, fontSize = 13.sp)
+        }
     }
 }
 

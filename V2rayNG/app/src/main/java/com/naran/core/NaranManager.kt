@@ -26,6 +26,10 @@ object NaranManager {
     private val _ads = MutableStateFlow<List<NaranAd>>(emptyList())
     val ads: StateFlow<List<NaranAd>> = _ads
 
+    /** کانفیگ‌های عمومی. خالی بودنش یعنی بخش «اتصال عمومی» اصلاً نباید دیده شود. */
+    private val _publicConfigs = MutableStateFlow<List<NaranPublicConfig>>(emptyList())
+    val publicConfigs: StateFlow<List<NaranPublicConfig>> = _publicConfigs
+
     private var appVersion: String = "1.0.0"
     private var latestRelease: NaranRelease? = null
 
@@ -34,6 +38,7 @@ object NaranManager {
         appVersion = versionName
         _ads.value = NaranStore.ads()
         refreshLocal()
+        refreshPublic()
     }
 
     // ── وضعیت محلی ──
@@ -46,6 +51,21 @@ object NaranManager {
         val alive = NaranStore.licenses().filterNot { isDead(it) }
         if (alive.size != NaranStore.licenses().size) NaranStore.saveLicenses(alive)
         _licenses.value = alive
+    }
+
+    /**
+     * کانفیگ‌های عمومیِ منقضی‌شده را کنار می‌گذارد.
+     *
+     * انقضا لوکال حساب می‌شود، پس اگر سرور در دسترس نباشد هم کانفیگ سر
+     * وقتش برداشته می‌شود.
+     */
+    fun refreshPublic() {
+        val nowSec = (System.currentTimeMillis() + NaranStore.serverSkew) / 1000
+        val alive = NaranStore.publicConfigs().filter { it.isAlive(nowSec) }
+        if (alive.size != NaranStore.publicConfigs().size) {
+            NaranStore.savePublicConfigs(alive)
+        }
+        _publicConfigs.value = alive
     }
 
     /**
@@ -85,7 +105,15 @@ object NaranManager {
         return maxOf(0L, minOf(wallLeft, bootLeft))
     }
 
+    /** کانفیگ‌های شخصی کاربر — از کدهایی که وارد کرده. */
     fun activeConfigs(): List<NaranConfig> = _licenses.value.map { it.config }
+
+    /** همه‌ی آنچه کاربر می‌تواند به آن وصل شود، شخصی و عمومی. */
+    fun allConnectable(): List<NaranConfig> =
+        activeConfigs() + _publicConfigs.value.map { it.config }
+
+    fun isPublic(configId: Int): Boolean =
+        _publicConfigs.value.any { it.config.id == configId }
 
     // ── فعال‌سازی ──
 
@@ -174,6 +202,16 @@ object NaranManager {
             if (list.isNotEmpty()) NaranStore.saveEndpoints(list)
         }
 
+        // کانفیگ‌های عمومی: هرچه سرور گفت، همان. اگر آرایه خالی بیاید یعنی
+        // در پنل خاموش شده و باید از دستگاه هم برداشته شود.
+        json.optJSONArray("public_configs")?.let { arr ->
+            val list = (0 until arr.length()).mapNotNull {
+                runCatching { NaranPublicConfig.from(arr.getJSONObject(it)) }.getOrNull()
+            }
+            NaranStore.savePublicConfigs(list)
+            _publicConfigs.value = list
+        }
+
         json.optJSONArray("ads")?.let { arr ->
             NaranStore.saveAds(arr)
             _ads.value = (0 until arr.length()).map { NaranAd.from(arr.getJSONObject(it)) }
@@ -186,6 +224,7 @@ object NaranManager {
         json.optJSONObject("release")?.let { latestRelease = NaranRelease.from(it) }
 
         refreshLocal()
+        refreshPublic()
         true
     }
 

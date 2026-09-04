@@ -116,6 +116,35 @@ data class NaranRelease(
     }
 }
 
+/**
+ * کانفیگ عمومی — بدون کد لایسنس، برای همه‌ی نصب‌ها.
+ *
+ * در پنل روشن و خاموش می‌شود و می‌تواند مهلت زمانی داشته باشد.
+ * expiresAt صفر یعنی تا وقتی که در پنل خاموش نشده.
+ */
+data class NaranPublicConfig(
+    val config: NaranConfig,
+    val expiresAt: Long          // ثانیه‌ی یونیکس، ۰ = بی‌انقضا
+) {
+    fun isAlive(nowSec: Long): Boolean = expiresAt == 0L || expiresAt > nowSec
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("config", config.toJson()); put("expiresAt", expiresAt)
+    }
+
+    companion object {
+        fun from(o: JSONObject) = NaranPublicConfig(
+            NaranConfig.from(o),                 // فیلدهای کانفیگ در همان سطح می‌آیند
+            o.optLong("expires_at", 0L)
+        )
+
+        fun fromCache(o: JSONObject) = NaranPublicConfig(
+            NaranConfig.from(o.getJSONObject("config")),
+            o.optLong("expiresAt", 0L)
+        )
+    }
+}
+
 sealed class ActivateResult {
     data class Ok(val license: NaranLicense) : ActivateResult()
     data class Rejected(val code: String, val message: String) : ActivateResult()
