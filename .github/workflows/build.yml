@@ -64,11 +64,18 @@ jobs:
 
       - name: بازسازی کیستور
         env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_ENC_PASS }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            printf %s "$KEYSTORE_B64" | tr -d "[:space:]" | base64 -d > /tmp/naran.jks
-            echo "SIGNED=1" >> $GITHUB_ENV
+          if [ -n "$KS_PASS" ] && [ -f ci/naran.jks.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
+              -in ci/naran.jks.enc -out /tmp/naran.jks -k "$KS_PASS"
+            if [ -s /tmp/naran.jks ]; then
+              echo "کیستور باز شد"
+              echo "SIGNED=1" >> $GITHUB_ENV
+            else
+              echo "::error::رمز کیستور اشتباه است"
+              exit 1
+            fi
           else
             echo "کیستور نیست — خروجی unsigned خواهد بود"
             echo "SIGNED=0" >> $GITHUB_ENV
