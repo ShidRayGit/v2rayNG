@@ -124,7 +124,6 @@ jobs:
           echo "ناران کنار گذاشته شد — این یک بیلد پایه است"
 
       - name: برندینگ — اسم و آیکون
-        if: inputs.naran != false
         run: |
           pip install --quiet Pillow
           RES=V2rayNG/app/src/main/res
@@ -162,6 +161,14 @@ jobs:
             echo "SIGNED=0" >> $GITHUB_ENV
           fi
 
+      - name: تنظیم gradle
+        run: |
+          if [ "${{ inputs.naran }}" = "false" ]; then
+            python3 tools/patch_gradle.py
+          else
+            python3 tools/patch_gradle.py --deps
+          fi
+
       - name: بیلد
         working-directory: V2rayNG
         env:
@@ -171,7 +178,7 @@ jobs:
           KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assemblePlaystoreDebug --no-daemon --stacktrace
 
       - name: تحویل APK
         if: always()
@@ -179,5 +186,6 @@ jobs:
         with:
           name: naran-apk
           path: V2rayNG/app/build/outputs/apk/**/*.apk
+          compression-level: 0
           if-no-files-found: warn
           retention-days: 30
