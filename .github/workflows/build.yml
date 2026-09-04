@@ -15,6 +15,10 @@ on:
         description: 'ماژول ناران را هم بیلد کن'
         type: boolean
         default: true
+      xray:
+        description: 'نسخه Xray — تگ AndroidLibXrayLite، خالی یعنی همان کامیت زیرماژول'
+        type: string
+        default: 'v26.6.27'
 
 jobs:
   build:
@@ -47,6 +51,26 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
 
+      - name: انتخاب نسخه Xray
+        id: xray
+        run: |
+          TAG="${{ inputs.xray }}"
+          if [ -z "$TAG" ]; then
+            TAG="$(cd AndroidLibXrayLite && git describe --tags --always)"
+            echo "نسخه‌ی زیرماژول: $TAG"
+          else
+            cd AndroidLibXrayLite
+            git fetch --tags --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG" 2>/dev/null \
+              || git fetch --tags origin
+            if ! git checkout -q "tags/$TAG"; then
+              echo "::error::تگ $TAG پیدا نشد. تگ‌های موجود:"
+              git tag --sort=-v:refname | head -12
+              exit 1
+            fi
+            echo "Xray روی $TAG قفل شد"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: نصب Go
         uses: actions/setup-go@v5
         with:
@@ -71,7 +95,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: libv2ray-${{ runner.os }}-${{ hashFiles('.git/modules/AndroidLibXrayLite/HEAD') }}
+          key: libv2ray-${{ runner.os }}-${{ steps.xray.outputs.tag }}
 
       - name: ساخت libv2ray.aar
         if: steps.cache-xray.outputs.cache-hit != 'true'
@@ -202,12 +226,13 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assemblePlaystoreDebug --no-daemon --stacktrace
+          echo "── ساخته شد با Xray ${{ steps.xray.outputs.tag }} ──"
 
       - name: تحویل APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: naran-apk
+          name: naran-apk-${{ steps.xray.outputs.tag }}
           path: V2rayNG/app/build/outputs/apk/**/*.apk
           compression-level: 0
           if-no-files-found: warn
