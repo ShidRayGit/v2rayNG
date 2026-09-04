@@ -158,6 +158,7 @@ fun ConnectScreen(
     onToggle: () -> Unit,
     onPickServer: () -> Unit,
     onRefreshProbe: () -> Unit,
+    onSettings: () -> Unit,
     onOpenChannel: (String) -> Unit
 ) {
     val traffic by NaranTraffic.flow.collectAsState()
@@ -193,14 +194,19 @@ fun ConnectScreen(
                 Spacer(Modifier.width(9.dp))
                 Text("ناران", style = MaterialTheme.typography.titleLarge)
             }
-            lic?.let {
-                val left = NaranManager.remaining(it)
-                Pill(
-                    text = if (left >= 3_600_000)
-                        "${fa(left / 3_600_000)} ساعت مانده"
-                    else "${fa(left / 60_000)} دقیقه مانده",
-                    color = if (left < 3_600_000) NaranColors.Dead else NaranColors.Live
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                lic?.let {
+                    val left = NaranManager.remaining(it)
+                    Pill(
+                        text = if (left >= 3_600_000)
+                            "${fa(left / 3_600_000)} ساعت مانده"
+                        else "${fa(left / 60_000)} دقیقه مانده",
+                        color = if (left < 3_600_000) NaranColors.Dead else NaranColors.Live
+                    )
+                }
+                IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
+                    GearMark()
+                }
             }
         }
 
@@ -358,6 +364,7 @@ fun ServerSheet(
     selectedId: Int?,
     onPick: (NaranConfig) -> Unit,
     onPing: (NaranConfig) -> Unit,
+    onForget: (NaranConfig) -> Unit,
     onAddCode: () -> Unit
 ) {
     Column(
@@ -389,7 +396,7 @@ fun ServerSheet(
                 modifier = Modifier.heightIn(max = 380.dp)
             ) {
                 items(configs, key = { "own-" + it.id }) { c ->
-                    ServerRow(c, c.id == selectedId, null, onPing) { onPick(c) }
+                    ServerRow(c, c.id == selectedId, null, onPing, onForget) { onPick(c) }
                 }
 
                 // این بخش فقط وقتی وجود دارد که در پنل کانفیگ عمومی گذاشته
@@ -430,7 +437,8 @@ fun ServerSheet(
                             p.config,
                             p.config.id == selectedId,
                             "عمومی",
-                            onPing
+                            onPing,
+                            null
                         ) { onPick(p.config) }
                     }
                 }
@@ -455,12 +463,39 @@ private fun ServerRow(
     selected: Boolean,
     badge: String?,
     onPing: (NaranConfig) -> Unit,
+    onForget: ((NaranConfig) -> Unit)?,
     onClick: () -> Unit
 ) {
     // پینگ فقط وقتی معنی دارد که همین سرور وصل باشد، چون هسته تأخیر
     // اتصال فعلی را می‌سنجد نه هر سروری را.
     var pinging by remember(c.id) { mutableStateOf(false) }
     var pingMs by remember(c.id) { mutableStateOf<Long?>(null) }
+    var confirmForget by remember(c.id) { mutableStateOf(false) }
+
+    if (confirmForget && onForget != null) {
+        AlertDialog(
+            onDismissRequest = { confirmForget = false },
+            containerColor = NaranColors.Surface,
+            title = { Text("حذف ${c.name}؟", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "این سرور از دستگاه شما پاک می‌شود. اگر کدش هنوز معتبر باشد، " +
+                        "می‌توانید دوباره واردش کنید.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmForget = false; onForget(c) }) {
+                    Text("حذف", color = NaranColors.Dead)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmForget = false }) {
+                    Text("بی‌خیال", color = NaranColors.Muted)
+                }
+            }
+        )
+    }
 
     LaunchedEffect(pinging) {
         if (!pinging) return@LaunchedEffect
@@ -519,7 +554,6 @@ private fun ServerRow(
                 )
             }
             if (selected) {
-                Spacer(Modifier.width(6.dp))
                 IconButton(
                     onClick = { pinging = true; pingMs = null; onPing(c) },
                     enabled = !pinging,
@@ -534,6 +568,12 @@ private fun ServerRow(
                         PingMark()
                     }
                 }
+            }
+            if (onForget != null) {
+                IconButton(
+                    onClick = { confirmForget = true },
+                    modifier = Modifier.size(38.dp)
+                ) { TrashMark() }
             }
         }
     }
@@ -557,6 +597,55 @@ private fun PingMark() {
             )
         }
         drawCircle(NaranColors.Glow, radius = size.width * 0.09f, center = c)
+    }
+}
+
+/** سطل زباله. */
+@Composable
+private fun TrashMark() {
+    Canvas(Modifier.size(16.dp)) {
+        val w = size.width
+        val stroke = Stroke(width = w * 0.11f, cap = StrokeCap.Round)
+        // درِ سطل
+        drawLine(NaranColors.Muted, Offset(w * 0.1f, w * 0.24f),
+            Offset(w * 0.9f, w * 0.24f), stroke.width, cap = StrokeCap.Round)
+        drawLine(NaranColors.Muted, Offset(w * 0.38f, w * 0.24f),
+            Offset(w * 0.42f, w * 0.10f), stroke.width, cap = StrokeCap.Round)
+        drawLine(NaranColors.Muted, Offset(w * 0.62f, w * 0.24f),
+            Offset(w * 0.58f, w * 0.10f), stroke.width, cap = StrokeCap.Round)
+        drawLine(NaranColors.Muted, Offset(w * 0.42f, w * 0.10f),
+            Offset(w * 0.58f, w * 0.10f), stroke.width, cap = StrokeCap.Round)
+        // بدنه
+        drawLine(NaranColors.Muted, Offset(w * 0.2f, w * 0.3f),
+            Offset(w * 0.27f, w * 0.9f), stroke.width, cap = StrokeCap.Round)
+        drawLine(NaranColors.Muted, Offset(w * 0.8f, w * 0.3f),
+            Offset(w * 0.73f, w * 0.9f), stroke.width, cap = StrokeCap.Round)
+        drawLine(NaranColors.Muted, Offset(w * 0.27f, w * 0.9f),
+            Offset(w * 0.73f, w * 0.9f), stroke.width, cap = StrokeCap.Round)
+    }
+}
+
+/** چرخ‌دنده‌ی تنظیمات — دایره با دندانه. */
+@Composable
+fun GearMark(tint: androidx.compose.ui.graphics.Color = NaranColors.Muted) {
+    Canvas(Modifier.size(20.dp)) {
+        val w = size.width
+        val c = Offset(w / 2, w / 2)
+        val stroke = Stroke(width = w * 0.1f, cap = StrokeCap.Round)
+        drawCircle(tint, radius = w * 0.24f, center = c, style = stroke)
+        repeat(8) { i ->
+            val a = Math.toRadians(i * 45.0)
+            val inner = w * 0.34f
+            val outer = w * 0.46f
+            drawLine(
+                tint,
+                Offset(c.x + (Math.cos(a) * inner).toFloat(),
+                    c.y + (Math.sin(a) * inner).toFloat()),
+                Offset(c.x + (Math.cos(a) * outer).toFloat(),
+                    c.y + (Math.sin(a) * outer).toFloat()),
+                stroke.width, cap = StrokeCap.Round
+            )
+        }
     }
 }
 

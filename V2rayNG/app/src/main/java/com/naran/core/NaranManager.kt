@@ -112,6 +112,21 @@ object NaranManager {
     fun allConnectable(): List<NaranConfig> =
         activeConfigs() + _publicConfigs.value.map { it.config }
 
+    /**
+     * حذف دستی یک سرور توسط کاربر.
+     *
+     * فقط از این دستگاه پاک می‌شود؛ لایسنس در پنل دست‌نخورده می‌ماند و
+     * کاربر می‌تواند همان کد را دوباره وارد کند. کانفیگ‌های عمومی حذف
+     * نمی‌شوند چون از سرور می‌آیند و در sync بعدی برمی‌گردند.
+     */
+    fun forget(configId: Int): Boolean {
+        val target = _licenses.value.firstOrNull { it.config.id == configId }
+            ?: return false
+        NaranStore.removeLicense(target.id)
+        refreshLocal()
+        return true
+    }
+
     fun isPublic(configId: Int): Boolean =
         _publicConfigs.value.any { it.config.id == configId }
 

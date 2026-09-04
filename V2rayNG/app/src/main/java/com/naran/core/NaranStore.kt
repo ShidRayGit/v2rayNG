@@ -28,6 +28,8 @@ object NaranStore {
     private const val K_SERVER_SKEW = "server_skew"
     private const val K_MEDIA_BASE = "media_base"
     private const val K_PUBLIC = "public_configs"
+    private const val K_AUTOCONNECT = "auto_connect"
+    private const val K_LAST_SERVER = "last_server"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -177,6 +179,16 @@ object NaranStore {
     var mediaBase: String
         get() = p().getString(K_MEDIA_BASE, "") ?: ""
         set(v) = p().edit().putString(K_MEDIA_BASE, v.trimEnd('/')).apply()
+
+    /** اتصال خودکار هنگام باز شدن اپ. */
+    var autoConnect: Boolean
+        get() = p().getBoolean(K_AUTOCONNECT, false)
+        set(v) = p().edit().putBoolean(K_AUTOCONNECT, v).apply()
+
+    /** آخرین سروری که کاربر انتخاب کرده بود. */
+    var lastServer: Int
+        get() = p().getInt(K_LAST_SERVER, -1)
+        set(v) = p().edit().putInt(K_LAST_SERVER, v).apply()
 
     fun wipe() = p().edit().clear().apply()
 }

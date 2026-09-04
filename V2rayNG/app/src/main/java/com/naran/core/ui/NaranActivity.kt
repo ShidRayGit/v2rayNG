@@ -86,6 +86,18 @@ class NaranActivity : ComponentActivity() {
         NaranProbe.clear()
     }
 
+    /** صفحه‌ی انتخاب اپ‌های خارج از تونل — از خود v2rayNG. */
+    private fun openPerAppProxy() {
+        runCatching {
+            startActivity(
+                Intent(
+                    this,
+                    com.v2ray.ang.ui.perappproxy.PerAppProxyActivity::class.java
+                )
+            )
+        }
+    }
+
     private fun openLink(url: String) {
         if (url.isBlank()) return
         runCatching {
@@ -104,6 +116,8 @@ class NaranActivity : ComponentActivity() {
         var selected by remember { mutableStateOf<NaranConfig?>(null) }
         var showPicker by remember { mutableStateOf(false) }
         var showLicense by remember { mutableStateOf(false) }
+        var showSettings by remember { mutableStateOf(false) }
+        var autoTried by remember { mutableStateOf(false) }
         val own = remember(licenses) { licenses.map { it.config } }
         val all = remember(own, publics) { own + publics.map { it.config } }
 
@@ -125,12 +139,23 @@ class NaranActivity : ComponentActivity() {
             }
         }
 
-        // اگر سرور انتخاب‌شده منقضی شد، برو سراغ اولی
+        // انتخاب سرور: آخرین انتخاب کاربر، وگرنه اولی
         LaunchedEffect(all) {
             if (selected == null || all.none { it.id == selected!!.id }) {
-                selected = all.firstOrNull()
+                selected = all.firstOrNull { it.id == NaranStore.lastServer }
+                    ?: all.firstOrNull()
             }
             NaranBridge.pruneRemoved(all.map { it.id }.toSet())
+        }
+
+        // اتصال خودکار، فقط یک بار در هر بار باز شدن اپ
+        LaunchedEffect(selected, svcState) {
+            if (!autoTried && NaranStore.autoConnect &&
+                selected != null && svcState == NaranServiceState.State.OFF
+            ) {
+                autoTried = true
+                selected?.let { connect(it) }
+            }
         }
 
         val needsCode = all.isEmpty()
@@ -152,7 +177,21 @@ class NaranActivity : ComponentActivity() {
                     },
                     onPickServer = { showPicker = true },
                     onRefreshProbe = { lifecycleScope.launch { NaranProbe.run() } },
+                    onSettings = { showSettings = true },
                     onOpenChannel = ::openLink
+                )
+            }
+
+            if (showSettings) {
+                SettingsScreen(
+                    versionName = BuildConfig.VERSION_NAME,
+                    update = NaranManager.updateAvailable(BuildConfig.VERSION_CODE),
+                    onBack = { showSettings = false },
+                    onPerApp = { openPerAppProxy() },
+                    onOpenChannel = ::openLink,
+                    onCheckUpdate = {
+                        lifecycleScope.launch { NaranManager.sync(force = true) }
+                    }
                 )
             }
 
@@ -168,10 +207,15 @@ class NaranActivity : ComponentActivity() {
                         selectedId = selected?.id,
                         onPick = {
                             selected = it
+                            NaranStore.lastServer = it.id
                             showPicker = false
                             if (running) disconnect()
                         },
                         onPing = { NaranServiceState.requestPing(this@NaranActivity) },
+                        onForget = { cfg ->
+                            if (running && selected?.id == cfg.id) disconnect()
+                            NaranManager.forget(cfg.id)
+                        },
                         onAddCode = { showPicker = false; showLicense = true }
                     )
                 }
