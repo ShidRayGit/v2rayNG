@@ -47,10 +47,16 @@ class NaranActivity : ComponentActivity() {
         )
 
         NaranManager.init(this, BuildConfig.VERSION_NAME)
+        NaranServiceState.register(this)
 
         setContent { NaranTheme { Root() } }
 
         lifecycleScope.launch { NaranManager.sync(force = true) }
+    }
+
+    override fun onDestroy() {
+        NaranServiceState.unregister(this)
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -61,21 +67,23 @@ class NaranActivity : ComponentActivity() {
     }
 
     private fun doStart() {
-        pendingConfig?.let {
-            NaranBridge.start(this)
-            NaranTraffic.start(lifecycleScope)
-        }
+        pendingConfig ?: return
+        NaranServiceState.markConnecting()
+        NaranBridge.start(this)
     }
 
     private fun connect(config: NaranConfig) {
         pendingConfig = config
+        NaranServiceState.markConnecting()
         val intent = NaranBridge.prepareConnect(this, config)
         if (intent == null) doStart() else vpnPermission.launch(intent)
     }
 
     private fun disconnect() {
+        NaranServiceState.markStopping()
         NaranBridge.stop(this)
         NaranTraffic.stop()
+        NaranProbe.clear()
     }
 
     private fun openLink(url: String) {
@@ -96,22 +104,24 @@ class NaranActivity : ComponentActivity() {
         var selected by remember { mutableStateOf<NaranConfig?>(null) }
         var showPicker by remember { mutableStateOf(false) }
         var showLicense by remember { mutableStateOf(false) }
-        var running by remember { mutableStateOf(false) }
-        var connecting by remember { mutableStateOf(false) }
-
         val own = remember(licenses) { licenses.map { it.config } }
         val all = remember(own, publics) { own + publics.map { it.config } }
 
-        // وضعیت واقعی سرویس را از هسته می‌گیریم، نه از حدس خودمان
-        LaunchedEffect(Unit) {
-            while (true) {
-                val now = runCatching { NaranBridge.isRunning() }.getOrDefault(false)
-                if (now != running) {
-                    running = now
-                    connecting = false
-                    if (now) NaranTraffic.start(lifecycleScope) else NaranTraffic.stop()
-                }
-                delay(1000)
+        // وضعیت از broadcast خود سرویس می‌آید، نه از پول کردن. سرویس در
+        // پروسه‌ی جداست و خواندن مستقیمش همیشه «خاموش» می‌داد.
+        val svcState by NaranServiceState.state.collectAsState()
+        val running = svcState == NaranServiceState.State.ON
+        val connecting = svcState == NaranServiceState.State.CONNECTING
+        val failed = svcState == NaranServiceState.State.FAILED
+
+        LaunchedEffect(running) {
+            if (running) {
+                NaranTraffic.start(lifecycleScope)
+                delay(1500)          // فرصت به تونل تا بالا بیاید
+                NaranProbe.run()
+            } else {
+                NaranTraffic.stop()
+                NaranProbe.clear()
             }
         }
 
@@ -135,15 +145,13 @@ class NaranActivity : ComponentActivity() {
                 ConnectScreen(
                     connected = running,
                     connecting = connecting,
+                    failed = failed,
                     selected = selected,
                     onToggle = {
-                        if (running) {
-                            disconnect()
-                        } else {
-                            selected?.let { connecting = true; connect(it) }
-                        }
+                        if (running) disconnect() else selected?.let { connect(it) }
                     },
                     onPickServer = { showPicker = true },
+                    onRefreshProbe = { lifecycleScope.launch { NaranProbe.run() } },
                     onOpenChannel = ::openLink
                 )
             }
@@ -161,8 +169,9 @@ class NaranActivity : ComponentActivity() {
                         onPick = {
                             selected = it
                             showPicker = false
-                            if (running) { disconnect() }
+                            if (running) disconnect()
                         },
+                        onPing = { NaranServiceState.requestPing(this@NaranActivity) },
                         onAddCode = { showPicker = false; showLicense = true }
                     )
                 }
