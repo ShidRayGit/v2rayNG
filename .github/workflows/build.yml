@@ -67,7 +67,7 @@ jobs:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > /tmp/naran.jks
+            printf %s "$KEYSTORE_B64" | tr -d "[:space:]" | base64 -d > /tmp/naran.jks
             echo "SIGNED=1" >> $GITHUB_ENV
           else
             echo "کیستور نیست — خروجی unsigned خواهد بود"
