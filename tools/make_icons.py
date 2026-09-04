@@ -124,11 +124,18 @@ def main():
         '    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />\n'
         '</adaptive-icon>\n'
     )
-    for folder in ("mipmap-anydpi-v26", "mipmap-anydpi"):
-        d = res / folder
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
-        (d / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
+    # فقط -v26 و بالاتر. اندروید قدیمی‌تر <adaptive-icon> را نمی‌شناسد و
+    # اگر در mipmap-anydpi بدون پسوند بگذاریم، لینک منابع شکست می‌خورد.
+    d = res / "mipmap-anydpi-v26"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
+    (d / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
+
+    # اگر از اجرای قبلی مانده، پاکش کن
+    stale_dir = res / "mipmap-anydpi"
+    if stale_dir.is_dir():
+        for f in stale_dir.glob("ic_launcher*.xml"):
+            f.unlink()
 
     # آیکون قدیمی v2rayNG اگر مانده باشد، جای ما را می‌گیرد
     for stale in res.glob("mipmap-*/ic_launcher.webp"):

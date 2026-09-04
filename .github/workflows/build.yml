@@ -126,16 +126,7 @@ jobs:
       - name: برندینگ — اسم و آیکون
         run: |
           pip install --quiet Pillow
-          RES=V2rayNG/app/src/main/res
-
-          # اسم اپ در همه‌ی زبان‌ها
-          for f in $RES/values*/strings.xml; do
-            [ -f "$f" ] || continue
-            sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">Naran VPN</string>|' "$f"
-          done
-          grep -h 'app_name' $RES/values/strings.xml || true
-
-          # آیکون، اگر لوگویی گذاشته شده باشد
+          python3 tools/set_app_name.py "Naran VPN"
           if ls branding/logo.* >/dev/null 2>&1; then
             python3 tools/make_icons.py
           else
