@@ -1,0 +1,80 @@
+package com.naran.core
+
+import android.app.Activity
+import android.content.Context
+import android.net.VpnService
+import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.MmkvManager
+
+/**
+ * پل بین ناران و هسته‌ی v2rayNG.
+ *
+ * کانفیگ‌های ما را به مخزن خودشان تزریق می‌کند و سرویس را با همان مسیری
+ * که خودشان استفاده می‌کنند بالا می‌آورد. یعنی هیچ‌جای سرویس VPN دست
+ * نمی‌خورد — فقط منبع کانفیگ عوض می‌شود.
+ *
+ * گروه ناران با subscriptionId ثابت از بقیه جدا نگه داشته می‌شود تا
+ * پاک کردنش بقیه را خراب نکند.
+ */
+object NaranBridge {
+
+    private const val SUB_ID = "naran"
+
+    /** نگاشت شناسه‌ی کانفیگ ناران به guid داخلی v2rayNG. */
+    private val guidCache = mutableMapOf<Int, String>()
+
+    /**
+     * کانفیگ را در مخزن v2rayNG می‌نشاند و guid می‌دهد.
+     * اگر قبلاً وارد شده باشد، همان guid قبلی برمی‌گردد.
+     */
+    fun ensureImported(config: NaranConfig): String? {
+        guidCache[config.id]?.let { existing ->
+            if (MmkvManager.decodeServerConfig(existing) != null) return existing
+            guidCache.remove(config.id)
+        }
+
+        val before = MmkvManager.decodeServerList(SUB_ID).toSet()
+        val (count, _) = AngConfigManager.importBatchConfig(config.raw, SUB_ID, true)
+        if (count <= 0) return null
+
+        val after = MmkvManager.decodeServerList(SUB_ID)
+        val fresh = after.firstOrNull { it !in before } ?: after.lastOrNull() ?: return null
+        guidCache[config.id] = fresh
+        return fresh
+    }
+
+    /**
+     * کانفیگ را انتخاب می‌کند. اگر مجوز VPN لازم باشد، اینتنت آن را
+     * برمی‌گرداند تا اکتیویتی خودش بپرسد؛ null یعنی آماده‌ی اتصال است.
+     */
+    fun prepareConnect(activity: Activity, config: NaranConfig): android.content.Intent? {
+        val guid = ensureImported(config) ?: return null
+        MmkvManager.setSelectServer(guid)
+        return VpnService.prepare(activity)
+    }
+
+    fun start(context: Context) {
+        LauncherManager.startService(context)
+    }
+
+    fun stop(context: Context) {
+        LauncherManager.stopService(context)
+    }
+
+    fun isRunning(): Boolean =
+        runCatching { CoreServiceManager.isRunning() }.getOrDefault(false)
+
+    /**
+     * کانفیگ‌هایی که دیگر لایسنس معتبری ندارند از مخزن v2rayNG هم پاک
+     * می‌شوند. بدون این، کانفیگ منقضی روی دستگاه می‌ماند.
+     */
+    fun pruneRemoved(aliveIds: Set<Int>) {
+        val stale = guidCache.filterKeys { it !in aliveIds }
+        stale.forEach { (id, guid) ->
+            runCatching { MmkvManager.removeServer(guid) }
+            guidCache.remove(id)
+        }
+    }
+}

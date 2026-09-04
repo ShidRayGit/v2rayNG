@@ -123,6 +123,21 @@ jobs:
           rm -rf V2rayNG/app/src/main/java/com/naran
           echo "ناران کنار گذاشته شد — این یک بیلد پایه است"
 
+      - name: دانلود فایل‌های مسیریابی
+        run: |
+          ASSETS=V2rayNG/app/src/main/assets
+          mkdir -p $ASSETS
+          BASE=https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
+          for f in geoip.dat geosite.dat; do
+            curl -fsSL -o "$ASSETS/$f" "$BASE/$f" && echo "  $f گرفته شد"
+          done
+          # هسته این نام را جدا می‌خواهد
+          XBASE=https://github.com/v2fly/geoip/releases/latest/download
+          curl -fsSL -o "$ASSETS/geoip-only-cn-private.dat" \
+            "$XBASE/geoip-only-cn-private.dat" \
+            || cp "$ASSETS/geoip.dat" "$ASSETS/geoip-only-cn-private.dat"
+          ls -lh $ASSETS
+
       - name: برندینگ — اسم و آیکون
         run: |
           pip install --quiet Pillow
@@ -158,6 +173,7 @@ jobs:
             python3 tools/patch_gradle.py
           else
             python3 tools/patch_gradle.py --deps
+            python3 tools/patch_manifest.py
           fi
 
       - name: بیلد
