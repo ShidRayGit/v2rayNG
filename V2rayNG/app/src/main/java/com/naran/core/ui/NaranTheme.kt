@@ -26,6 +26,7 @@ object NaranColors {
     val GlowDim = Color(0xFF8A6A38)
     val Live = Color(0xFF34D399)
     val Dead = Color(0xFFF87171)
+    val Warn = Color(0xFFFBBF24)
     val Text = Color(0xFFE6ECF7)
     val Muted = Color(0xFF8496B8)
 }

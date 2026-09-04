@@ -120,6 +120,7 @@ class NaranActivity : ComponentActivity() {
         var showPicker by remember { mutableStateOf(false) }
         var showLicense by remember { mutableStateOf(false) }
         var showSettings by remember { mutableStateOf(false) }
+        var showLog by remember { mutableStateOf(false) }
         var autoTried by remember { mutableStateOf(false) }
         val own = remember(licenses) { licenses.map { it.config } }
         val all = remember(own, publics) { own + publics.map { it.config } }
@@ -196,8 +197,13 @@ class NaranActivity : ComponentActivity() {
                     onOpenChannel = ::openLink,
                     onCheckUpdate = {
                         lifecycleScope.launch { NaranManager.sync(force = true) }
-                    }
+                    },
+                    onLog = { showLog = true }
                 )
+            }
+
+            if (showLog) {
+                LogScreen(onBack = { showLog = false })
             }
 
             if (showPicker) {

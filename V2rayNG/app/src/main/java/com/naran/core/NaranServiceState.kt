@@ -48,15 +48,21 @@ object NaranServiceState {
                 AppConfig.MSG_STATE_RUNNING,
                 AppConfig.MSG_STATE_START_SUCCESS -> {
                     _error.value = ""
+                    if (_state.value != State.ON) NaranLog.i("اتصال", "برقرار شد")
                     _state.value = State.ON
                 }
 
                 AppConfig.MSG_STATE_NOT_RUNNING,
-                AppConfig.MSG_STATE_STOP_SUCCESS -> _state.value = State.OFF
+                AppConfig.MSG_STATE_STOP_SUCCESS -> {
+                    if (_state.value == State.ON) NaranLog.w("اتصال", "قطع شد")
+                    _state.value = State.OFF
+                }
 
                 // بدون این، اتصال ناموفق تا ابد روی «در حال اتصال» می‌ماند
                 AppConfig.MSG_STATE_START_FAILURE -> {
-                    _error.value = intent.getStringExtra("content").orEmpty()
+                    val msg = intent.getStringExtra("content").orEmpty()
+                    _error.value = msg
+                    NaranLog.e("اتصال", "شکست: ${msg.ifBlank { "بدون توضیح" }}")
                     _state.value = State.FAILED
                 }
 
@@ -67,6 +73,7 @@ object NaranServiceState {
                             ?.firstOrNull { it.name == "getElapsed" || it.name == "getTime" }
                             ?.invoke(obj) as? Long
                     }.getOrNull() ?: -1L
+                    NaranLog.i("پینگ", if (ms > 0) "$ms ms" else "بی‌پاسخ")
                     _ping.tryEmit(ms)
                 }
             }
@@ -101,6 +108,7 @@ object NaranServiceState {
     }
 
     fun fail(message: String) {
+        NaranLog.e("اتصال", message)
         _error.value = message
         _state.value = State.FAILED
     }

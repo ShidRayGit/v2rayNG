@@ -154,6 +154,7 @@ object NaranManager {
         }
 
         if (!json.optBoolean("ok")) {
+            NaranLog.w("لایسنس", "رد شد: ${json.optString("error")}")
             return@withContext ActivateResult.Rejected(
                 json.optString("error", "unknown"),
                 json.optString("message", "کد پذیرفته نشد")
@@ -175,6 +176,7 @@ object NaranManager {
         )
         NaranStore.upsertLicense(lic)
         refreshLocal()
+        NaranLog.i("لایسنس", "کد پذیرفته شد — سرور «${lic.config.name}»")
         ActivateResult.Ok(lic)
     }
 

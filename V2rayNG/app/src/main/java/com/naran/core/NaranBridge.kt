@@ -37,14 +37,21 @@ object NaranBridge {
 
         val before = MmkvManager.decodeServerList(SUB_ID).toSet()
         val (count, _) = AngConfigManager.importBatchConfig(config.raw, SUB_ID, true)
-        if (count <= 0) return null
+        if (count <= 0) {
+            NaranLog.e("پل", "کانفیگ پذیرفته نشد — قالبش را بررسی کنید")
+            return null
+        }
 
         val after = MmkvManager.decodeServerList(SUB_ID)
         val fresh = after.firstOrNull { it !in before } ?: after.lastOrNull() ?: return null
 
         // اگر ذخیره شده ولی قابل خواندن نیست، سرویس همان لحظه
         // «Failed to decode server config» می‌دهد. بهتر است اینجا بفهمیم.
-        if (MmkvManager.decodeServerConfig(fresh) == null) return null
+        if (MmkvManager.decodeServerConfig(fresh) == null) {
+            NaranLog.e("پل", "کانفیگ ذخیره شد ولی خوانده نمی‌شود")
+            return null
+        }
+        NaranLog.i("پل", "کانفیگ «${config.name}» وارد شد")
 
         guidCache[config.id] = fresh
         return fresh

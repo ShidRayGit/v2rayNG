@@ -21,8 +21,11 @@ if not GRADLE.is_file():
 src = GRADLE.read_text(encoding="utf-8")
 changed = []
 
-# ── فقط دو معماری رایج، به‌جای همه ──
-if "abiFilters" not in src:
+# ── فقط دو معماری رایج ──
+# با --slim فعال می‌شود. پیش‌فرض خاموش است چون hev-socks5-tunnel از مسیر
+# جدا کپی می‌شود و فیلتر کردن ABI ممکن است ناقصش کند؛ آن وقت هسته بالا
+# می‌آید ولی موقع وصل کردن TUN می‌میرد.
+if "--slim" in sys.argv and "abiFilters" not in src:
     m = re.search(r"defaultConfig\s*\{", src)
     if m:
         src = src[:m.end()] + '''

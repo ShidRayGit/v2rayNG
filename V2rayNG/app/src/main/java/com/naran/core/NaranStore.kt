@@ -30,6 +30,7 @@ object NaranStore {
     private const val K_PUBLIC = "public_configs"
     private const val K_AUTOCONNECT = "auto_connect"
     private const val K_LAST_SERVER = "last_server"
+    private const val K_CORE_LOG = "core_log"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -189,6 +190,16 @@ object NaranStore {
     var lastServer: Int
         get() = p().getInt(K_LAST_SERVER, -1)
         set(v) = p().edit().putInt(K_LAST_SERVER, v).apply()
+
+    /**
+     * لاگ هسته. پیش‌فرض خاموش.
+     *
+     * روشن بودنش یعنی loglevel هسته از none بالاتر می‌رود و ممکن است
+     * چیزهایی چاپ کند که سانسور کاملشان نکند. فقط برای عیب‌یابی.
+     */
+    var coreLog: Boolean
+        get() = p().getBoolean(K_CORE_LOG, false)
+        set(v) = p().edit().putBoolean(K_CORE_LOG, v).apply()
 
     fun wipe() = p().edit().clear().apply()
 }

@@ -529,17 +529,8 @@ private fun ServerRow(
                     c.location.ifBlank { c.protocol },
                     style = MaterialTheme.typography.bodySmall
                 )
-                pingMs?.let { ms ->
-                    Text("  ·  ", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        if (ms > 0) "${fa(ms)} ms" else "بی‌پاسخ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            ms <= 0 -> NaranColors.Dead
-                            ms < 300 -> NaranColors.Live
-                            else -> NaranColors.Muted
-                        }
-                    )
+                if (pingMs != null && pingMs!! > 0) {
+                    Text("  ·  ms", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -557,18 +548,31 @@ private fun ServerRow(
                 )
             }
             if (selected) {
-                IconButton(
-                    onClick = { pinging = true; pingMs = null; onPing(c) },
-                    enabled = !pinging,
-                    modifier = Modifier.size(38.dp)
+                // بعد از تست، عدد جای خود دکمه می‌نشیند. زدن دوباره‌اش
+                // تست را تکرار می‌کند.
+                Box(
+                    Modifier.defaultMinSize(minWidth = 44.dp, minHeight = 38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = !pinging) {
+                            pinging = true; pingMs = null; onPing(c)
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (pinging) {
-                        CircularProgressIndicator(
+                    when {
+                        pinging -> CircularProgressIndicator(
                             Modifier.size(15.dp), strokeWidth = 2.dp,
                             color = NaranColors.Muted
                         )
-                    } else {
-                        PingMark()
+                        pingMs != null -> Text(
+                            if (pingMs!! > 0) fa(pingMs!!) else "—",
+                            fontSize = 13.sp,
+                            color = when {
+                                pingMs!! <= 0 -> NaranColors.Dead
+                                pingMs!! < 300 -> NaranColors.Live
+                                else -> NaranColors.Warn
+                            }
+                        )
+                        else -> PingMark()
                     }
                 }
             }

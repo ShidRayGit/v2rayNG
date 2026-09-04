@@ -32,7 +32,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onPerApp: () -> Unit,
     onOpenChannel: (String) -> Unit,
-    onCheckUpdate: () -> Unit
+    onCheckUpdate: () -> Unit,
+    onLog: () -> Unit
 ) {
     var auto by remember { mutableStateOf(NaranStore.autoConnect) }
     val (channelName, channelUrl) = remember { NaranManager.channel() }
@@ -96,6 +97,12 @@ fun SettingsScreen(
                 )
                 Divider()
             }
+            ActionRow(
+                title = "گزارش",
+                subtitle = "برای وقتی چیزی کار نمی‌کند",
+                onClick = onLog
+            )
+            Divider()
             ActionRow(
                 title = "نسخه‌ی فعلی",
                 subtitle = fa(versionName),
