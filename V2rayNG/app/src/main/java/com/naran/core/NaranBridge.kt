@@ -41,18 +41,40 @@ object NaranBridge {
 
         val after = MmkvManager.decodeServerList(SUB_ID)
         val fresh = after.firstOrNull { it !in before } ?: after.lastOrNull() ?: return null
+
+        // اگر ذخیره شده ولی قابل خواندن نیست، سرویس همان لحظه
+        // «Failed to decode server config» می‌دهد. بهتر است اینجا بفهمیم.
+        if (MmkvManager.decodeServerConfig(fresh) == null) return null
+
         guidCache[config.id] = fresh
         return fresh
     }
 
     /**
-     * کانفیگ را انتخاب می‌کند. اگر مجوز VPN لازم باشد، اینتنت آن را
-     * برمی‌گرداند تا اکتیویتی خودش بپرسد؛ null یعنی آماده‌ی اتصال است.
+     * نتیجه‌ی آماده‌سازی اتصال.
+     *
+     * قبلاً همه‌ی این حالت‌ها null برمی‌گشت، پس «کانفیگ وارد نشد» با
+     * «مجوز لازم نیست» یکی می‌شد و خطا بی‌صدا رد می‌شد.
      */
-    fun prepareConnect(activity: Activity, config: NaranConfig): android.content.Intent? {
-        val guid = ensureImported(config) ?: return null
+    sealed class Prepared {
+        data object Ready : Prepared()
+        data class NeedsPermission(val intent: android.content.Intent) : Prepared()
+        data class Failed(val reason: String) : Prepared()
+    }
+
+    fun prepareConnect(activity: Activity, config: NaranConfig): Prepared {
+        val guid = ensureImported(config)
+            ?: return Prepared.Failed("کانفیگ این سرور خوانده نشد")
+
         MmkvManager.setSelectServer(guid)
-        return VpnService.prepare(activity)
+
+        // تأیید کن که واقعاً نشست؛ وگرنه سرویس با «No server selected» می‌میرد
+        if (MmkvManager.getSelectServer() != guid) {
+            return Prepared.Failed("سرور انتخاب نشد")
+        }
+
+        val intent = VpnService.prepare(activity)
+        return if (intent == null) Prepared.Ready else Prepared.NeedsPermission(intent)
     }
 
     fun start(context: Context) {

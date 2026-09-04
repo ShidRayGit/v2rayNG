@@ -155,6 +155,7 @@ fun ConnectScreen(
     connected: Boolean,
     connecting: Boolean,
     failed: Boolean,
+    errorText: String,
     selected: NaranConfig?,
     onToggle: () -> Unit,
     onPickServer: () -> Unit,
@@ -235,9 +236,10 @@ fun ConnectScreen(
         if (failed) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "سرور دیگری را امتحان کنید یا کد تازه بگیرید",
+                errorText.ifBlank { "سرور دیگری را امتحان کنید یا کد تازه بگیرید" },
                 style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
             )
         }
 

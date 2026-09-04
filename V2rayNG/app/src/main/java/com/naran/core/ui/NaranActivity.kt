@@ -75,8 +75,11 @@ class NaranActivity : ComponentActivity() {
     private fun connect(config: NaranConfig) {
         pendingConfig = config
         NaranServiceState.markConnecting()
-        val intent = NaranBridge.prepareConnect(this, config)
-        if (intent == null) doStart() else vpnPermission.launch(intent)
+        when (val p = NaranBridge.prepareConnect(this, config)) {
+            is NaranBridge.Prepared.Ready -> doStart()
+            is NaranBridge.Prepared.NeedsPermission -> vpnPermission.launch(p.intent)
+            is NaranBridge.Prepared.Failed -> NaranServiceState.fail(p.reason)
+        }
     }
 
     private fun disconnect() {
@@ -127,6 +130,7 @@ class NaranActivity : ComponentActivity() {
         val running = svcState == NaranServiceState.State.ON
         val connecting = svcState == NaranServiceState.State.CONNECTING
         val failed = svcState == NaranServiceState.State.FAILED
+        val errorText by NaranServiceState.error.collectAsState()
 
         LaunchedEffect(running) {
             if (running) {
@@ -171,6 +175,7 @@ class NaranActivity : ComponentActivity() {
                     connected = running,
                     connecting = connecting,
                     failed = failed,
+                    errorText = errorText,
                     selected = selected,
                     onToggle = {
                         if (running) disconnect() else selected?.let { connect(it) }

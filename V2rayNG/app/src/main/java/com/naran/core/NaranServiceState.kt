@@ -29,6 +29,10 @@ object NaranServiceState {
     private val _state = MutableStateFlow(State.OFF)
     val state: StateFlow<State> = _state
 
+    /** پیام خطای سرویس. بدون این فقط «برقرار نشد» می‌بینیم، نه علتش. */
+    private val _error = MutableStateFlow("")
+    val error: StateFlow<String> = _error
+
     /** نتیجه‌ی پینگ برای سروری که تست شده. میلی‌ثانیه، منفی یعنی ناموفق. */
     private val _ping = MutableSharedFlow<Long>(
         replay = 1, extraBufferCapacity = 8,
@@ -42,13 +46,19 @@ object NaranServiceState {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_STATE_RUNNING,
-                AppConfig.MSG_STATE_START_SUCCESS -> _state.value = State.ON
+                AppConfig.MSG_STATE_START_SUCCESS -> {
+                    _error.value = ""
+                    _state.value = State.ON
+                }
 
                 AppConfig.MSG_STATE_NOT_RUNNING,
                 AppConfig.MSG_STATE_STOP_SUCCESS -> _state.value = State.OFF
 
                 // بدون این، اتصال ناموفق تا ابد روی «در حال اتصال» می‌ماند
-                AppConfig.MSG_STATE_START_FAILURE -> _state.value = State.FAILED
+                AppConfig.MSG_STATE_START_FAILURE -> {
+                    _error.value = intent.getStringExtra("content").orEmpty()
+                    _state.value = State.FAILED
+                }
 
                 AppConfig.MSG_MEASURE_DELAY_RESULT -> {
                     val ms = runCatching {
@@ -85,7 +95,15 @@ object NaranServiceState {
         registered = false
     }
 
-    fun markConnecting() { _state.value = State.CONNECTING }
+    fun markConnecting() {
+        _error.value = ""
+        _state.value = State.CONNECTING
+    }
+
+    fun fail(message: String) {
+        _error.value = message
+        _state.value = State.FAILED
+    }
     fun markStopping() { _state.value = State.OFF }
 
     /** درخواست پینگ سرور انتخاب‌شده. نتیجه از فلوی ping می‌آید. */
