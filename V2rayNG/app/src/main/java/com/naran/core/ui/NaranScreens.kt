@@ -391,7 +391,7 @@ fun ServerSheet(
     selectedId: Int?,
     searching: Boolean,
     onPick: (NaranConfig) -> Unit,
-    onPing: (NaranConfig) -> Unit,
+    onPing: (NaranConfig) -> Boolean,
     onForget: (NaranConfig) -> Unit,
     onDiscover: () -> Unit,
     onDonate: () -> Unit,
@@ -543,7 +543,7 @@ private fun ServerRow(
     selected: Boolean,
     badge: String?,
     isPublic: Boolean,
-    onPing: (NaranConfig) -> Unit,
+    onPing: (NaranConfig) -> Boolean,
     onForget: ((NaranConfig) -> Unit)?,
     onClick: () -> Unit
 ) {
@@ -611,7 +611,10 @@ private fun ServerRow(
                         .defaultMinSize(minWidth = 46.dp, minHeight = 38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = !pinging) {
-                            pinging = true; pingMs = null; onPing(c)
+                            // اگر وصل نیستیم، اسپینر بی‌خود نچرخد
+                            pingMs = null
+                            pinging = onPing(c)
+                            if (!pinging) pingMs = -1L
                         },
                     contentAlignment = Alignment.Center
                 ) {

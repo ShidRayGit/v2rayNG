@@ -67,17 +67,63 @@ object NaranServiceState {
                 }
 
                 AppConfig.MSG_MEASURE_DELAY_RESULT -> {
-                    val ms = runCatching {
-                        val obj = intent.getSerializableExtra("content")
-                        obj?.javaClass?.methods
-                            ?.firstOrNull { it.name == "getElapsed" || it.name == "getTime" }
-                            ?.invoke(obj) as? Long
-                    }.getOrNull() ?: -1L
-                    NaranLog.i("پینگ", if (ms > 0) "$ms ms" else "بی‌پاسخ")
+                    val ms = extractLatency(intent.getSerializableExtra("content"))
+                    NaranLog.i("پینگ", if (ms > 0) ms.toString() + " ms" else "بی‌پاسخ")
                     _ping.tryEmit(ms)
                 }
             }
         }
+    }
+
+    /**
+     * عدد تأخیر را از نتیجه‌ی تست بیرون می‌کشد.
+     *
+     * نام فیلد در ConnectionTestResult بین نسخه‌های v2rayNG فرق می‌کند و
+     * حدس زدنش قبلاً باعث می‌شد پینگ همیشه «بی‌پاسخ» بدهد. به‌جای حدس،
+     * همه‌ی گتِرها و فیلدهای عددی را می‌گردیم و اولین مقداری که شبیه
+     * تأخیر است برمی‌داریم. تایپ هم مهم نیست — Int و Long هر دو قبول.
+     */
+    private fun extractLatency(obj: Any?): Long {
+        if (obj == null) return -1L
+        if (obj is Number) return obj.toLong()
+
+        val preferred = listOf("elapsed", "delay", "ping", "time", "latency", "ms")
+
+        fun plausible(v: Any?): Long? {
+            val n = (v as? Number)?.toLong() ?: return null
+            // تأخیر منطقی، یا -1 که یعنی ناموفق. اعداد نجومی مثل
+            // timestamp را کنار می‌گذاریم.
+            return if (n == -1L || n in 0..120_000) n else null
+        }
+
+        // اول گترهایی که اسمشان مرتبط است
+        val methods = runCatching { obj.javaClass.methods.toList() }.getOrDefault(emptyList())
+        for (key in preferred) {
+            val m = methods.firstOrNull {
+                it.parameterTypes.isEmpty() &&
+                    it.name.lowercase().contains(key) &&
+                    it.name.startsWith("get")
+            } ?: continue
+            plausible(runCatching { m.invoke(obj) }.getOrNull())?.let { return it }
+        }
+
+        // بعد فیلدها با همان ترتیب اولویت
+        val fields = runCatching { obj.javaClass.declaredFields.toList() }
+            .getOrDefault(emptyList())
+        for (key in preferred) {
+            val f = fields.firstOrNull { it.name.lowercase().contains(key) } ?: continue
+            plausible(runCatching { f.isAccessible = true; f.get(obj) }.getOrNull())
+                ?.let { return it }
+        }
+
+        // آخرین تلاش: هر فیلد عددی که عددش منطقی باشد
+        for (f in fields) {
+            plausible(runCatching { f.isAccessible = true; f.get(obj) }.getOrNull())
+                ?.let { return it }
+        }
+
+        NaranLog.w("پینگ", "عدد تأخیر در " + obj.javaClass.simpleName + " پیدا نشد")
+        return -1L
     }
 
     fun register(context: Context) {
@@ -121,19 +167,41 @@ object NaranServiceState {
      * تک‌تک با MSG_MEASURE_DELAY_RESULT می‌فرستد.
      */
     fun requestPingAll(context: Context) {
+        if (_state.value != State.ON) {
+            NaranLog.w("پینگ", "برای تست همه باید وصل باشید")
+            return
+        }
+        val msg = NaranConst.MSG_MEASURE_ALL
+        if (msg == null) {
+            NaranLog.w("پینگ", "این نسخه تست همه را پشتیبانی نمی‌کند")
+            return
+        }
         runCatching {
-            MessageHelper.sendMsg2Service(
-                context.applicationContext, AppConfig.MSG_MEASURE_CONFIG, ""
-            )
+            MessageHelper.sendMsg2Service(context.applicationContext, msg, "")
         }.onFailure { NaranLog.w("پینگ", "تست همه شروع نشد") }
     }
 
-    /** درخواست پینگ سرور انتخاب‌شده. نتیجه از فلوی ping می‌آید. */
-    fun requestPing(context: Context) {
-        runCatching {
+    /**
+     * درخواست پینگ سرور انتخاب‌شده.
+     *
+     * هسته فقط وقتی وصل باشد تأخیر را می‌سنجد — measureV2rayDelay اول
+     * isRunning را چک می‌کند و اگر خاموش باشد بی‌صدا برمی‌گردد. قبلاً
+     * همین باعث می‌شد دکمه دوازده ثانیه بچرخد و آخرش «—» بدهد بدون
+     * اینکه کاربر بفهمد چرا.
+     *
+     * @return false یعنی اصلاً فرستاده نشد
+     */
+    fun requestPing(context: Context): Boolean {
+        if (_state.value != State.ON) {
+            NaranLog.w("پینگ", "برای تست باید وصل باشید")
+            _ping.tryEmit(-1L)
+            return false
+        }
+        return runCatching {
             MessageHelper.sendMsg2Service(
                 context.applicationContext, AppConfig.MSG_MEASURE_DELAY, ""
             )
-        }
+            true
+        }.getOrDefault(false)
     }
 }

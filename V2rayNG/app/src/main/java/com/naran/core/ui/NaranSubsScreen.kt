@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -271,13 +272,18 @@ private fun SubCard(
                     .clip(RoundedCornerShape(3.dp))
                     .background(NaranColors.Night)
             ) {
+                // هر دو شاخه باید Brush باشند، وگرنه تایپ‌ها نمی‌خوانند
                 Box(
                     Modifier
                         .fillMaxWidth(ratio)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(3.dp))
                         .background(
-                            if (ratio > 0.9f) NaranColors.Dead else NaranColors.powerOn
+                            if (ratio > 0.9f)
+                                Brush.linearGradient(
+                                    listOf(NaranColors.Dead, NaranColors.Dead)
+                                )
+                            else NaranColors.powerOn
                         )
                 )
             }

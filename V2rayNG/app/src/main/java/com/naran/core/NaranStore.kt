@@ -297,7 +297,9 @@ object NaranStore {
     }
 
     fun markNoticeSeen(id: Int) {
-        val all = (seenNotices() + id).takeLast(80).toSet()
+        // Set ترتیب ندارد، پس اول به List تبدیل می‌شود تا بشود آخری‌ها را
+        // نگه داشت و فهرست بی‌نهایت بزرگ نشود.
+        val all = (seenNotices().toList() + id).distinct().takeLast(80)
         val arr = JSONArray()
         all.forEach { arr.put(it) }
         p().edit().putString(K_NOTICE_SEEN, arr.toString()).apply()
