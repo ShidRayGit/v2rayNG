@@ -30,13 +30,22 @@ object NaranManager {
     private val _publicConfigs = MutableStateFlow<List<NaranPublicConfig>>(emptyList())
     val publicConfigs: StateFlow<List<NaranPublicConfig>> = _publicConfigs
 
+    private val _notices = MutableStateFlow<List<NaranNotice>>(emptyList())
+    val notices: StateFlow<List<NaranNotice>> = _notices
+
+    private val _blocks = MutableStateFlow<List<NaranBlock>>(emptyList())
+    val blocks: StateFlow<List<NaranBlock>> = _blocks
+
     private var appVersion: String = "1.0.0"
     private var latestRelease: NaranRelease? = null
 
     fun init(ctx: Context, versionName: String) {
         NaranStore.init(ctx)
+        NaranDirect.init(ctx)
+        T.init(ctx)
         appVersion = versionName
         _ads.value = NaranStore.ads()
+        NaranSubs.load()
         refreshLocal()
         refreshPublic()
     }
@@ -188,7 +197,12 @@ object NaranManager {
 
         val ids = JSONArray()
         NaranStore.licenses().forEach { ids.put(it.id) }
-        val body = JSONObject().put("license_ids", ids)
+        val subDomains = JSONArray()
+        NaranSubs.domains().forEach { subDomains.put(it) }
+        val body = JSONObject().apply {
+            put("license_ids", ids)
+            put("sub_domains", subDomains)
+        }
 
         val (json, source) = try {
             NaranApi.race("/api/v1/sync", body, NaranStore.endpoints())
@@ -240,9 +254,189 @@ object NaranManager {
 
         json.optJSONObject("release")?.let { latestRelease = NaranRelease.from(it) }
 
+        json.optJSONArray("notices")?.let { arr ->
+            val seen = NaranStore.seenNotices()
+            _notices.value = (0 until arr.length())
+                .map { NaranNotice.from(arr.getJSONObject(it)) }
+                .filterNot { it.id in seen }
+        }
+
+        json.optJSONArray("blocklist")?.let { arr ->
+            _blocks.value = (0 until arr.length())
+                .map { NaranBlock.from(arr.getJSONObject(it)) }
+        }
+
+        json.optJSONObject("sub")?.let { o ->
+            NaranSubs.updateMinutes = o.optInt("update_minutes", 60)
+            NaranSubs.sortDefault = o.optBoolean("sort_default", true)
+            NaranSubs.pingTieMs = o.optLong("ping_tie_ms", 5L)
+        }
+
         refreshLocal()
         refreshPublic()
         true
+    }
+
+    // ── اهدای کانفیگ ──
+
+    suspend fun donate(
+        raw: String,
+        configName: String,
+        donorName: String,
+        telegram: String,
+        capacity: Int,
+        limitGb: Int,
+        unlimited: Boolean
+    ): DonateResult = withContext(Dispatchers.IO) {
+        val clean = raw.trim()
+        if (clean.isEmpty() || !clean.contains("://")) {
+            return@withContext DonateResult.Rejected("bad_config", T.donateBadLink)
+        }
+
+        // دفعه‌ی بعد دوباره نپرسیم
+        NaranStore.donorName = donorName.trim()
+        NaranStore.donorTelegram = telegram.trim().removePrefix("@")
+
+        val body = JSONObject().apply {
+            put("raw", clean)
+            put("config_name", configName.trim())
+            put("donor_name", donorName.trim())
+            put("telegram", telegram.trim().removePrefix("@"))
+            put("capacity", capacity)
+            put("limit_gb", if (unlimited) 0 else limitGb)
+            put("unlimited", unlimited)
+            put("device_id", NaranStore.deviceId())
+        }
+
+        val json = try {
+            NaranApi.race("/api/v1/donate", body, NaranStore.endpoints()).first
+        } catch (e: Exception) {
+            return@withContext DonateResult.Offline(T.offline)
+        }
+
+        if (!json.optBoolean("ok")) {
+            NaranLog.w("اهدا", "رد شد: " + json.optString("error"))
+            return@withContext DonateResult.Rejected(
+                json.optString("error", "unknown"),
+                json.optString("message", T.donateBadLink)
+            )
+        }
+        NaranLog.i("اهدا", "کانفیگ فرستاده شد")
+        DonateResult.Ok(json.optString("message", T.donateThanks))
+    }
+
+    // ── جستجوی سرور عمومی ──
+
+    suspend fun discover(): DiscoverResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("device_id", NaranStore.deviceId())
+
+        val json = try {
+            NaranApi.race("/api/v1/discover", body, NaranStore.endpoints(),
+                configOnly = true).first
+        } catch (e: Exception) {
+            return@withContext DiscoverResult.Offline(T.offline)
+        }
+
+        if (!json.optBoolean("ok")) {
+            return@withContext DiscoverResult.None(
+                json.optString("message", T.noneAvailable))
+        }
+
+        val cfgJson = json.optJSONObject("config")
+            ?: return@withContext DiscoverResult.None(T.noneAvailable)
+
+        val found = NaranPublicConfig.from(cfgJson)
+        val list = NaranStore.publicConfigs()
+            .filterNot { it.config.id == found.config.id } + found
+        NaranStore.savePublicConfigs(list)
+        _publicConfigs.value = list
+        NaranLog.i("جستجو", "سرور «" + found.config.name + "» پیدا شد")
+        DiscoverResult.Ok(found)
+    }
+
+    // ── گزارش مصرف ──
+
+    /**
+     * مصرف را جمع می‌کند تا دور بعدِ گزارش.
+     *
+     * کلید یا "c:<configId>" است یا "d:<donationId>" — چون سرور این دو
+     * را جدا حساب می‌کند.
+     */
+    fun trackUsage(config: NaranConfig, deltaBytes: Long) {
+        if (deltaBytes <= 0) return
+        val pub = _publicConfigs.value.firstOrNull { it.config.id == config.id }
+        val key = if (pub != null && pub.donationId > 0) "d:" + pub.donationId
+                  else "c:" + config.id
+        val m = NaranStore.pendingUsage()
+        m[key] = (m[key] ?: 0L) + deltaBytes
+        NaranStore.savePendingUsage(m)
+    }
+
+    /** اگر اتصال شکست خورد، به سرور بگو تا سرور مرده را کنار بگذارد. */
+    fun trackFailure(config: NaranConfig) {
+        val pub = _publicConfigs.value.firstOrNull { it.config.id == config.id } ?: return
+        if (pub.donationId <= 0) return
+        val m = NaranStore.pendingUsage()
+        m["f:" + pub.donationId] = (m["f:" + pub.donationId] ?: 0L) + 1
+        NaranStore.savePendingUsage(m)
+    }
+
+    suspend fun flushUsage(): Boolean = withContext(Dispatchers.IO) {
+        val pending = NaranStore.pendingUsage()
+        if (pending.isEmpty()) return@withContext true
+
+        val items = JSONArray()
+        pending.forEach { (key, value) ->
+            val parts = key.split(":")
+            if (parts.size != 2) return@forEach
+            val id = parts[1].toIntOrNull() ?: return@forEach
+            items.put(JSONObject().apply {
+                when (parts[0]) {
+                    "d" -> { put("donation_id", id); put("bytes", value); put("ok", true) }
+                    "f" -> { put("donation_id", id); put("bytes", 0); put("ok", false) }
+                    else -> { put("config_id", id); put("bytes", value); put("ok", true) }
+                }
+            })
+        }
+        if (items.length() == 0) return@withContext true
+
+        val body = JSONObject().apply {
+            put("device_id", NaranStore.deviceId())
+            put("items", items)
+        }
+
+        try {
+            NaranApi.race("/api/v1/report", body, NaranStore.endpoints()).first
+        } catch (e: Exception) {
+            return@withContext false      // نگهش دار تا دور بعد
+        }
+
+        NaranStore.savePendingUsage(emptyMap())
+        true
+    }
+
+    fun dismissNotice(id: Int) {
+        NaranStore.markNoticeSeen(id)
+        _notices.value = _notices.value.filterNot { it.id == id }
+    }
+
+    /**
+     * الگوهای مسدود که باید به هسته داده شوند.
+     *
+     * موارد اجباری همیشه هستند؛ اختیاری‌ها اگر کاربر خاموششان نکرده باشد.
+     */
+    fun activeBlockPatterns(): List<String> {
+        val off = NaranStore.disabledBlocks()
+        return _blocks.value
+            .filter { !it.optional || it.id !in off }
+            .map { it.pattern }
+    }
+
+    fun toggleBlock(id: Int, enabled: Boolean) {
+        val off = NaranStore.disabledBlocks().toMutableSet()
+        if (enabled) off.remove(id) else off.add(id)
+        NaranStore.saveDisabledBlocks(off)
+        _blocks.value = _blocks.value.toList()   // برای بازکشیدن UI
     }
 
     fun adsFor(placement: String): List<NaranAd> =

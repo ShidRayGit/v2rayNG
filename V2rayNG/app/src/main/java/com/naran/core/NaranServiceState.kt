@@ -114,6 +114,20 @@ object NaranServiceState {
     }
     fun markStopping() { _state.value = State.OFF }
 
+    /**
+     * تست همه‌ی کانفیگ‌ها.
+     *
+     * v2rayNG این را با MSG_MEASURE_CONFIG انجام می‌دهد و نتیجه‌ها را
+     * تک‌تک با MSG_MEASURE_DELAY_RESULT می‌فرستد.
+     */
+    fun requestPingAll(context: Context) {
+        runCatching {
+            MessageHelper.sendMsg2Service(
+                context.applicationContext, AppConfig.MSG_MEASURE_CONFIG, ""
+            )
+        }.onFailure { NaranLog.w("پینگ", "تست همه شروع نشد") }
+    }
+
     /** درخواست پینگ سرور انتخاب‌شده. نتیجه از فلوی ping می‌آید. */
     fun requestPing(context: Context) {
         runCatching {

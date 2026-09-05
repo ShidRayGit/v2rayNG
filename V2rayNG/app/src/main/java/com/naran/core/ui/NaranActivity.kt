@@ -1,7 +1,6 @@
 package com.naran.core.ui
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -11,11 +10,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
+import android.content.Context
+import android.os.PowerManager
 import com.naran.core.*
 import com.v2ray.ang.BuildConfig
 import kotlinx.coroutines.delay
@@ -31,10 +35,14 @@ class NaranActivity : ComponentActivity() {
 
     private var pendingConfig: NaranConfig? = null
 
+    /** برای اینکه تغییر زبان بلافاصله دیده شود. */
+    private val langTick = mutableStateOf(0)
+
     private val vpnPermission = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) doStart()
+        else NaranServiceState.markStopping()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,9 +54,9 @@ class NaranActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
-        // فایل‌های مسیریابی را از APK به app_assets کپی می‌کند. v2rayNG
-        // این را در MainActivity انجام می‌دهد و چون آن را دور زدیم،
-        // هسته geosite.dat را پیدا نمی‌کرد و همان لحظه می‌مرد.
+        // فایل‌های مسیریابی را از APK به app_assets کپی می‌کند. v2rayNG این
+        // را در MainActivity انجام می‌دهد و چون آن را دور زدیم، هسته
+        // geosite.dat را پیدا نمی‌کرد و همان لحظه می‌مرد.
         runCatching {
             com.v2ray.ang.handler.SettingsManager.initAssets(this, assets)
         }.onFailure { NaranLog.e("راه‌اندازی", "کپی فایل‌های مسیریابی ناموفق") }
@@ -56,10 +64,23 @@ class NaranActivity : ComponentActivity() {
         NaranManager.init(this, BuildConfig.VERSION_NAME)
         NaranServiceState.register(this)
 
-        setContent { NaranTheme { Root() } }
+        setContent {
+            key(langTick.value) {
+                NaranTheme { Root() }
+            }
+        }
 
-        lifecycleScope.launch { NaranManager.sync(force = true) }
+        lifecycleScope.launch {
+            NaranManager.sync(force = true)
+            NaranManager.flushUsage()
+            NaranSubs.refreshAll(force = true)     // هر بار باز شدن اپ
+        }
     }
+
+    /** وقتی صفحه قفل است به‌روزرسانی نمی‌کنیم — باتری بی‌خود می‌رود. */
+    private fun screenOn(): Boolean = runCatching {
+        (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+    }.getOrDefault(true)
 
     override fun onDestroy() {
         NaranServiceState.unregister(this)
@@ -70,7 +91,17 @@ class NaranActivity : ComponentActivity() {
         super.onResume()
         NaranManager.refreshLocal()
         NaranManager.refreshPublic()
-        lifecycleScope.launch { NaranManager.sync() }
+        lifecycleScope.launch {
+            NaranManager.sync()
+            NaranManager.flushUsage()
+            NaranSubs.refreshAll(force = true)
+        }
+    }
+
+    override fun onPause() {
+        // مصرف تجمیع‌شده را از دست ندهیم اگر اپ بسته شود
+        lifecycleScope.launch { NaranManager.flushUsage() }
+        super.onPause()
     }
 
     private fun doStart() {
@@ -94,16 +125,14 @@ class NaranActivity : ComponentActivity() {
         NaranBridge.stop(this)
         NaranTraffic.stop()
         NaranProbe.clear()
+        lifecycleScope.launch { NaranManager.flushUsage() }
     }
 
     /** صفحه‌ی انتخاب اپ‌های خارج از تونل — از خود v2rayNG. */
     private fun openPerAppProxy() {
         runCatching {
             startActivity(
-                Intent(
-                    this,
-                    com.v2ray.ang.ui.perappproxy.PerAppProxyActivity::class.java
-                )
+                Intent(this, com.v2ray.ang.ui.perappproxy.PerAppProxyActivity::class.java)
             )
         }
     }
@@ -128,9 +157,37 @@ class NaranActivity : ComponentActivity() {
         var showLicense by remember { mutableStateOf(false) }
         var showSettings by remember { mutableStateOf(false) }
         var showLog by remember { mutableStateOf(false) }
+        var showDonate by remember { mutableStateOf(false) }
+        var showSubs by remember { mutableStateOf(false) }
+        var searching by remember { mutableStateOf(false) }
+        var pingingSub by remember { mutableStateOf<String?>(null) }
         var autoTried by remember { mutableStateOf(false) }
+
+        val snackbar = remember { SnackbarHostState() }
+        val scope = rememberCoroutineScope()
+
+        val subs by NaranSubs.subs.collectAsState()
+        val notices by NaranManager.notices.collectAsState()
+
         val own = remember(licenses) { licenses.map { it.config } }
-        val all = remember(own, publics) { own + publics.map { it.config } }
+        // کانفیگ‌های ساب هم قابل انتخاب‌اند. شناسه‌شان از هش لینک می‌آید
+        // تا با کانفیگ‌های لایسنسی برخورد نکند.
+        val subConfigs = remember(subs) {
+            subs.flatMap { s ->
+                s.configs.map { c ->
+                    NaranConfig(
+                        id = 700_000 + Math.abs((s.id + c.raw).hashCode() % 200_000),
+                        name = c.name,
+                        location = s.title.ifBlank { s.domain },
+                        flag = "", protocol = c.raw.substringBefore("://"),
+                        raw = c.raw
+                    )
+                }
+            }
+        }
+        val all = remember(own, publics, subConfigs) {
+            own + subConfigs + publics.map { it.config }
+        }
 
         // وضعیت از broadcast خود سرویس می‌آید، نه از پول کردن. سرویس در
         // پروسه‌ی جداست و خواندن مستقیمش همیشه «خاموش» می‌داد.
@@ -148,6 +205,38 @@ class NaranActivity : ComponentActivity() {
             } else {
                 NaranTraffic.stop()
                 NaranProbe.clear()
+            }
+        }
+
+        // اتصال ناموفق روی سرور اهدایی را به سرور گزارش می‌کنیم تا کنار
+        // گذاشته شود و بقیه گرفتارش نشوند.
+        LaunchedEffect(failed) {
+            if (failed) selected?.let { NaranManager.trackFailure(it) }
+        }
+
+        // مصرف را هر دقیقه تجمیع و هر ۵ دقیقه ارسال می‌کنیم
+        LaunchedEffect(running, selected) {
+            if (!running || selected == null) return@LaunchedEffect
+            var lastTotal = 0L
+            var ticks = 0
+            while (true) {
+                delay(60_000)
+                val snap = NaranTraffic.flow.value
+                val total = snap.sessionUp + snap.sessionDown
+                val delta = total - lastTotal
+                if (delta > 0) {
+                    selected?.let { NaranManager.trackUsage(it, delta) }
+                    lastTotal = total
+                }
+                if (++ticks >= 5) { ticks = 0; NaranManager.flushUsage() }
+            }
+        }
+
+        // به‌روزرسانی دوره‌ای ساب، فقط وقتی صفحه روشن است
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(5 * 60_000)
+                if (screenOn()) NaranSubs.refreshAll()
             }
         }
 
@@ -170,21 +259,65 @@ class NaranActivity : ComponentActivity() {
             }
         }
 
-        val needsCode = all.isEmpty()
+        val selectedIsPublic = selected?.let { s ->
+            publics.any { it.config.id == s.id }
+        } ?: false
 
         Box(Modifier.fillMaxSize()) {
-            if (needsCode || showLicense) {
-                LicenseScreen(
+            when {
+                showDonate -> DonateScreen(
+                    minGb = 500,
+                    onBack = { showDonate = false },
+                    onDone = { msg ->
+                        showDonate = false
+                        scope.launch { snackbar.showSnackbar(msg) }
+                    }
+                )
+
+                showLog -> LogScreen(onBack = { showLog = false })
+
+                showSettings -> SettingsScreen(
+                    versionName = BuildConfig.VERSION_NAME,
+                    update = NaranManager.updateAvailable(BuildConfig.VERSION_CODE),
+                    onBack = { showSettings = false },
+                    onPerApp = { openPerAppProxy() },
+                    onOpenChannel = ::openLink,
+                    onCheckUpdate = {
+                        lifecycleScope.launch { NaranManager.sync(force = true) }
+                    },
+                    onLog = { showLog = true },
+                    onDonate = { showDonate = true },
+                    onSubs = { showSubs = true },
+                    onLanguageChanged = { langTick.value++ }
+                )
+
+                showSubs -> SubsScreen(
+                    onBack = { showSubs = false },
+                    pingingId = pingingSub,
+                    onPingAll = { sub ->
+                        // تست همه فقط وقتی وصل باشیم معنی دارد
+                        pingingSub = sub.id
+                        NaranServiceState.requestPingAll(this@NaranActivity)
+                        scope.launch {
+                            delay(20_000)
+                            pingingSub = null
+                            NaranSubs.applySort(sub.id)
+                        }
+                    }
+                )
+
+                showLicense -> LicenseScreen(
                     onActivated = { showLicense = false },
                     onOpenChannel = ::openLink
                 )
-            } else {
-                ConnectScreen(
+
+                else -> ConnectScreen(
                     connected = running,
                     connecting = connecting,
                     failed = failed,
                     errorText = errorText,
                     selected = selected,
+                    isPublic = selectedIsPublic,
                     onToggle = {
                         if (running) disconnect() else selected?.let { connect(it) }
                     },
@@ -195,22 +328,9 @@ class NaranActivity : ComponentActivity() {
                 )
             }
 
-            if (showSettings) {
-                SettingsScreen(
-                    versionName = BuildConfig.VERSION_NAME,
-                    update = NaranManager.updateAvailable(BuildConfig.VERSION_CODE),
-                    onBack = { showSettings = false },
-                    onPerApp = { openPerAppProxy() },
-                    onOpenChannel = ::openLink,
-                    onCheckUpdate = {
-                        lifecycleScope.launch { NaranManager.sync(force = true) }
-                    },
-                    onLog = { showLog = true }
-                )
-            }
-
-            if (showLog) {
-                LogScreen(onBack = { showLog = false })
+            // اطلاعیه‌ها روی همه‌چیز
+            notices.firstOrNull()?.let { n ->
+                NoticeDialog(n) { NaranManager.dismissNotice(n.id) }
             }
 
             if (showPicker) {
@@ -223,6 +343,7 @@ class NaranActivity : ComponentActivity() {
                         configs = own,
                         publicConfigs = publics,
                         selectedId = selected?.id,
+                        searching = searching,
                         onPick = {
                             selected = it
                             NaranStore.lastServer = it.id
@@ -234,10 +355,32 @@ class NaranActivity : ComponentActivity() {
                             if (running && selected?.id == cfg.id) disconnect()
                             NaranManager.forget(cfg.id)
                         },
+                        onDiscover = {
+                            if (!searching) {
+                                searching = true
+                                scope.launch {
+                                    when (val r = NaranManager.discover()) {
+                                        is DiscoverResult.Ok -> {
+                                            selected = r.config.config
+                                            NaranStore.lastServer = r.config.config.id
+                                        }
+                                        is DiscoverResult.None ->
+                                            snackbar.showSnackbar(r.message)
+                                        is DiscoverResult.Offline ->
+                                            snackbar.showSnackbar(r.message)
+                                    }
+                                    searching = false
+                                }
+                            }
+                        },
+                        onDonate = { showPicker = false; showDonate = true },
+                        onSubs = { showPicker = false; showSubs = true },
                         onAddCode = { showPicker = false; showLicense = true }
                     )
                 }
             }
+
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

@@ -3,6 +3,7 @@ package com.naran.core
 import android.app.Activity
 import android.content.Context
 import android.net.VpnService
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.handler.AngConfigManager
@@ -71,20 +72,41 @@ object NaranBridge {
 
     fun prepareConnect(activity: Activity, config: NaranConfig): Prepared {
         val guid = ensureImported(config)
-            ?: return Prepared.Failed("کانفیگ این سرور خوانده نشد")
+            ?: return Prepared.Failed(T.failedHint)
 
         MmkvManager.setSelectServer(guid)
 
         // تأیید کن که واقعاً نشست؛ وگرنه سرویس با «No server selected» می‌میرد
         if (MmkvManager.getSelectServer() != guid) {
-            return Prepared.Failed("سرور انتخاب نشد")
+            return Prepared.Failed(T.failedHint)
         }
 
         val intent = VpnService.prepare(activity)
         return if (intent == null) Prepared.Ready else Prepared.NeedsPermission(intent)
     }
 
+    /**
+     * الگوهای مسدود را در تنظیمات مسیریابی v2rayNG می‌نشاند.
+     *
+     * کلید تنظیمات ممکن است بین نسخه‌ها فرق کند، پس همه‌چیز در
+     * runCatching است: اگر نشست خوب، اگر ننشست اتصال به‌هرحال برقرار
+     * می‌شود و فقط مسدودسازی اعمال نمی‌گردد.
+     */
+    private fun applyBlocklist() {
+        val patterns = NaranManager.activeBlockPatterns()
+        runCatching {
+            val value = patterns.joinToString(",")
+            MmkvManager.encodeSettings(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, value)
+            NaranLog.i("مسیریابی", "${'$'}{patterns.size} الگوی مسدود اعمال شد")
+        }.onFailure {
+            if (patterns.isNotEmpty()) {
+                NaranLog.w("مسیریابی", "الگوهای مسدود اعمال نشدند")
+            }
+        }
+    }
+
     fun start(context: Context) {
+        applyBlocklist()
         LauncherManager.startService(context)
     }
 

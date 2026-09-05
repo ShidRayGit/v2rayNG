@@ -31,6 +31,13 @@ object NaranStore {
     private const val K_AUTOCONNECT = "auto_connect"
     private const val K_LAST_SERVER = "last_server"
     private const val K_CORE_LOG = "core_log"
+    private const val K_LANG = "language"
+    private const val K_PENDING = "pending_usage"
+    private const val K_DONOR = "donor_name"
+    private const val K_TG = "donor_telegram"
+    private const val K_SUBS = "subscriptions"
+    private const val K_BLOCKS_OFF = "blocks_disabled"
+    private const val K_NOTICE_SEEN = "notices_seen"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -200,6 +207,101 @@ object NaranStore {
     var coreLog: Boolean
         get() = p().getBoolean(K_CORE_LOG, false)
         set(v) = p().edit().putBoolean(K_CORE_LOG, v).apply()
+
+    /** "en" یا "fa" یا خالی (یعنی از زبان گوشی حدس بزن). */
+    var language: String
+        get() = p().getString(K_LANG, "") ?: ""
+        set(v) = p().edit().putString(K_LANG, v).apply()
+
+    /** اسم و تلگرام اهداکننده، تا هر بار دوباره نپرسیم. */
+    var donorName: String
+        get() = p().getString(K_DONOR, "") ?: ""
+        set(v) = p().edit().putString(K_DONOR, v).apply()
+
+    var donorTelegram: String
+        get() = p().getString(K_TG, "") ?: ""
+        set(v) = p().edit().putString(K_TG, v).apply()
+
+    /**
+     * مصرفی که هنوز به سرور گزارش نشده.
+     *
+     * اگر همان لحظه بفرستیم و شبکه قطع باشد، عدد از دست می‌رود. اینجا
+     * جمع می‌شود تا دور بعد.
+     */
+    fun pendingUsage(): MutableMap<String, Long> {
+        val raw = p().getString(K_PENDING, null) ?: return mutableMapOf()
+        return try {
+            val o = JSONObject(raw)
+            val m = mutableMapOf<String, Long>()
+            o.keys().forEach { k -> m[k] = o.optLong(k) }
+            m
+        } catch (e: Exception) {
+            mutableMapOf()
+        }
+    }
+
+    fun savePendingUsage(m: Map<String, Long>) {
+        val o = JSONObject()
+        m.forEach { (k, v) -> o.put(k, v) }
+        p().edit().putString(K_PENDING, o.toString()).apply()
+    }
+
+    // ── سابسکریپشن ──
+
+    fun subscriptions(): List<Subscription> {
+        val raw = p().getString(K_SUBS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull {
+                runCatching { Subscription.from(arr.getJSONObject(it)) }.getOrNull()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSubscriptions(list: List<Subscription>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it.toJson()) }
+        p().edit().putString(K_SUBS, arr.toString()).apply()
+    }
+
+    // ── بلاک‌لیستی که کاربر خاموش کرده ──
+
+    fun disabledBlocks(): Set<Int> {
+        val raw = p().getString(K_BLOCKS_OFF, null) ?: return emptySet()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getInt(it) }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    fun saveDisabledBlocks(ids: Set<Int>) {
+        val arr = JSONArray()
+        ids.forEach { arr.put(it) }
+        p().edit().putString(K_BLOCKS_OFF, arr.toString()).apply()
+    }
+
+    // ── اطلاعیه‌هایی که کاربر دیده ──
+
+    fun seenNotices(): Set<Int> {
+        val raw = p().getString(K_NOTICE_SEEN, null) ?: return emptySet()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getInt(it) }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    fun markNoticeSeen(id: Int) {
+        val all = (seenNotices() + id).takeLast(80).toSet()
+        val arr = JSONArray()
+        all.forEach { arr.put(it) }
+        p().edit().putString(K_NOTICE_SEEN, arr.toString()).apply()
+    }
 
     fun wipe() = p().edit().clear().apply()
 }

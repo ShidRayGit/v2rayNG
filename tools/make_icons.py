@@ -76,7 +76,8 @@ def main():
     if len(sys.argv) > 1:
         src = Path(sys.argv[1])
     else:
-        found = [p for ext in ("jpg", "jpeg", "png", "webp")
+        # PNG اول: شفافیت دارد و آیکون تطبیقی با آن تمیزتر درمی‌آید.
+        found = [p for ext in ("png", "webp", "jpg", "jpeg")
                  for p in (root / "branding").glob(f"logo.{ext}")]
         if not found:
             sys.exit("تصویری در branding/ پیدا نشد. logo.jpg یا logo.png بگذارید.")

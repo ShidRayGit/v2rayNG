@@ -34,6 +34,15 @@ if "--slim" in sys.argv and "abiFilters" not in src:
         }''' + src[m.end():]
         changed.append("abiFilters")
 
+# ── شناسه‌ی یکتای اپ ──
+# تا وقتی com.v2ray.ang بماند، اندروید ناران را «آپدیت v2rayNG» می‌بیند
+# و اگر امضاها فرق کنند اصلاً اجازه‌ی نصب نمی‌دهد.
+APP_ID = "ir.naran.vpn"
+m = re.search(r'applicationId\s*=\s*"([^"]+)"', src)
+if m and m.group(1) != APP_ID:
+    src = src[:m.start()] + f'applicationId = "{APP_ID}"' + src[m.end():]
+    changed.append(f"applicationId → {APP_ID}")
+
 if "--deps" in sys.argv:
     m = re.search(r"^dependencies\s*\{", src, re.M)
     if not m:

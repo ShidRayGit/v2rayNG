@@ -124,25 +124,79 @@ data class NaranRelease(
  */
 data class NaranPublicConfig(
     val config: NaranConfig,
-    val expiresAt: Long          // ثانیه‌ی یونیکس، ۰ = بی‌انقضا
+    val expiresAt: Long,             // ثانیه‌ی یونیکس، ۰ = بی‌انقضا
+    val donationId: Int = 0,         // اگر اهدایی باشد
+    val donor: String = "",
+    val trial: Boolean = false
 ) {
     fun isAlive(nowSec: Long): Boolean = expiresAt == 0L || expiresAt > nowSec
 
     fun toJson(): JSONObject = JSONObject().apply {
-        put("config", config.toJson()); put("expiresAt", expiresAt)
+        put("config", config.toJson())
+        put("expiresAt", expiresAt)
+        put("donationId", donationId)
+        put("donor", donor)
+        put("trial", trial)
     }
 
     companion object {
+        /** از پاسخ سرور: فیلدهای کانفیگ در همان سطح می‌آیند. */
         fun from(o: JSONObject) = NaranPublicConfig(
-            NaranConfig.from(o),                 // فیلدهای کانفیگ در همان سطح می‌آیند
-            o.optLong("expires_at", 0L)
+            NaranConfig.from(o),
+            o.optLong("expires_at", 0L),
+            o.optInt("donation_id", 0),
+            o.optString("donor"),
+            o.optBoolean("trial")
         )
 
         fun fromCache(o: JSONObject) = NaranPublicConfig(
             NaranConfig.from(o.getJSONObject("config")),
-            o.optLong("expiresAt", 0L)
+            o.optLong("expiresAt", 0L),
+            o.optInt("donationId", 0),
+            o.optString("donor"),
+            o.optBoolean("trial")
         )
     }
+}
+
+/** نتیجه‌ی اهدای کانفیگ. */
+/** اطلاعیه از پنل. */
+data class NaranNotice(
+    val id: Int, val title: String, val body: String, val level: String
+) {
+    val isWarning: Boolean get() = level == "warn"
+
+    companion object {
+        fun from(o: JSONObject) = NaranNotice(
+            o.optInt("id"), o.optString("title"),
+            o.optString("body"), o.optString("level", "info")
+        )
+    }
+}
+
+/** یک الگوی مسدودسازی. */
+data class NaranBlock(
+    val id: Int, val pattern: String, val label: String, val optional: Boolean
+) {
+    companion object {
+        fun from(o: JSONObject) = NaranBlock(
+            o.optInt("id"), o.optString("pattern"),
+            o.optString("label"), o.optBoolean("optional", true)
+        )
+    }
+}
+
+sealed class DonateResult {
+    data class Ok(val message: String) : DonateResult()
+    data class Rejected(val code: String, val message: String) : DonateResult()
+    data class Offline(val message: String) : DonateResult()
+}
+
+/** نتیجه‌ی جستجوی سرور عمومی. */
+sealed class DiscoverResult {
+    data class Ok(val config: NaranPublicConfig) : DiscoverResult()
+    data class None(val message: String) : DiscoverResult()
+    data class Offline(val message: String) : DiscoverResult()
 }
 
 sealed class ActivateResult {

@@ -77,34 +77,31 @@ object NaranTraffic {
         job = null
     }
 
-    // ── قالب‌بندی فارسی ──
+    // ── قالب‌بندی، بر اساس زبان انتخابی ──
 
-    private val FA = charArrayOf('۰','۱','۲','۳','۴','۵','۶','۷','۸','۹')
-
-    fun fa(s: String): String = buildString {
-        s.forEach { append(if (it in '0'..'9') FA[it - '0'] else it) }
-    }
+    fun fa(s: String): String = T.num(s)
 
     fun bytes(n: Long): String {
-        val u = arrayOf("بایت", "کیلوبایت", "مگابایت", "گیگابایت")
+        val u = T.bytesUnits
         var v = n.toDouble(); var i = 0
         while (v >= 1024 && i < u.size - 1) { v /= 1024; i++ }
-        return fa(if (i == 0) "${v.toInt()}" else String.format("%.1f", v)) + " " + u[i]
+        val num = if (i == 0) "${'$'}{v.toInt()}" else String.format("%.1f", v)
+        return T.num(num) + " " + u[i]
     }
 
     fun speed(bps: Long): String {
         val bits = bps * 8.0
         return when {
-            bits >= 1_000_000 -> fa(String.format("%.1f", bits / 1_000_000)) + " مگابیت"
-            bits >= 1_000 -> fa(String.format("%.0f", bits / 1_000)) + " کیلوبیت"
-            else -> fa("$bps") + " بایت"
+            bits >= 1_000_000 -> T.num(String.format("%.1f", bits / 1_000_000)) + " " + T.mbps
+            bits >= 1_000 -> T.num(String.format("%.0f", bits / 1_000)) + " " + T.kbps
+            else -> T.num(bps.toString()) + " " + T.bps
         }
     }
 
     fun duration(ms: Long): String {
         val s = ms / 1000
         val h = s / 3600; val m = s % 3600 / 60; val sec = s % 60
-        return fa(
+        return T.num(
             if (h > 0) String.format("%d:%02d:%02d", h, m, sec)
             else String.format("%02d:%02d", m, sec)
         )

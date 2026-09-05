@@ -25,6 +25,10 @@ object NaranApi {
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
+            // بیرون از تونل. اگر از تونل می‌رفت، پنلِ روی خاک ایران از
+            // دید سرور خارجی دور یا غیرقابل دسترس می‌شد.
+            .socketFactory(NaranDirect.socketFactory)
+            .dns { hostname -> NaranDirect.resolve(hostname) }
             // در نسخه‌ی نهایی pinning را روشن کنید — راهنما در PATCHES.md
             // .certificatePinner(NaranPinning.pinner())
             .build()
