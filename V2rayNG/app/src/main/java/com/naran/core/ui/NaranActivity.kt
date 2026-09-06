@@ -48,6 +48,11 @@ class NaranActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // حافظه باید قبل از خواندن هر تنظیمی آماده باشد. این تابع
+        // idempotent است، پس صدا زدنش دوباره در NaranManager.init ضرری
+        // ندارد — ولی نبودنش اینجا یعنی کرش در همان لحظه‌ی باز شدن.
+        NaranStore.init(this)
+
         // ممنوعیت اسکرین‌شات از پنل کنترل می‌شود، پیش‌فرض آزاد. چون این
         // پرچم فقط موقع ساخته شدن پنجره اعمال می‌شود، تغییرش در پنل بعد
         // از بستن و باز کردن اپ دیده می‌شود.
