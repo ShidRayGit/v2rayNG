@@ -1,5 +1,12 @@
 package com.naran.core.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.InfiniteRepeatableSpec
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -81,6 +88,29 @@ object NaranColors {
         listOf(Color(0xFF1A2338), Color(0xFF121A2C))
     )
 
+    /**
+     * تابش متحرک صفحه.
+     *
+     * مرکز و شعاع با زمان جابه‌جا می‌شوند، پس نور «نفس می‌کشد» به‌جای
+     * اینکه یک لکه‌ی ثابت باشد. سه رنگ درگیرند: کهربایی برند، بنفش، و
+     * فیروزه‌ای.
+     */
+    fun animatedGlow(phase: Float, w: Float, h: Float): Brush {
+        val cx = w * (0.5f + 0.22f * kotlin.math.cos(phase.toDouble()).toFloat())
+        val cy = h * (0.16f + 0.10f * kotlin.math.sin(phase * 1.3).toFloat())
+        val r = h * (0.95f + 0.18f * kotlin.math.sin(phase * 0.7).toFloat())
+        return Brush.radialGradient(
+            colors = listOf(
+                Glow.copy(alpha = 0.20f),
+                Violet.copy(alpha = 0.15f),
+                Cyan.copy(alpha = 0.09f),
+                Color.Transparent
+            ),
+            center = androidx.compose.ui.geometry.Offset(cx, cy),
+            radius = r.coerceAtLeast(1f)
+        )
+    }
+
     /** بخش عمومی، تا از سرورهای شخصی جدا دیده شود. */
     val publicTint = Brush.linearGradient(
         listOf(Cyan.copy(alpha = 0.13f), Violet.copy(alpha = 0.10f))
@@ -112,6 +142,27 @@ private val NaranType = Typography(
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 23.sp),
     bodySmall = TextStyle(fontSize = 13.sp, color = NaranColors.Muted, lineHeight = 21.sp)
 )
+
+/**
+ * فاز مشترک انیمیشن.
+ *
+ * همه‌ی اجزای نئونی از یک ساعت می‌خوانند تا هماهنگ بتپند؛ اگر هرکدام
+ * ساعت خودش را داشته باشد، صفحه شلوغ و بی‌قاعده می‌شود.
+ */
+@Composable
+fun rememberNeonPhase(): Float {
+    val t = rememberInfiniteTransition(label = "neon")
+    val phase by t.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            tween(14000, easing = androidx.compose.animation.core.LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+    return phase
+}
 
 /** جهت صفحه از زبان می‌آید: فارسی راست‌چین، انگلیسی چپ‌چین. */
 @Composable

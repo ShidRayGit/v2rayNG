@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -174,6 +176,8 @@ fun ConnectScreen(
     onPickServer: () -> Unit,
     onRefreshProbe: () -> Unit,
     onPing: () -> Boolean,
+    onRefresh: () -> Unit,
+    refreshing: Boolean,
     onSettings: () -> Unit,
     onOpenChannel: (String) -> Unit
 ) {
@@ -190,7 +194,7 @@ fun ConnectScreen(
         licenses.firstOrNull { it.config.id == selected?.id }
     }
 
-    ScreenBackground {
+    RefreshableBackground(refreshing = refreshing, onRefresh = onRefresh) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -220,6 +224,20 @@ fun ConnectScreen(
                                     else NaranColors.Live
                         )
                     }
+                    IconButton(
+                        onClick = onRefresh,
+                        enabled = !refreshing,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        if (refreshing) {
+                            CircularProgressIndicator(
+                                Modifier.size(16.dp), strokeWidth = 2.dp,
+                                color = NaranColors.Muted
+                            )
+                        } else {
+                            RefreshMark()
+                        }
+                    }
                     IconButton(onClick = onSettings, modifier = Modifier.size(42.dp)) {
                         GearMark()
                     }
@@ -228,29 +246,43 @@ fun ConnectScreen(
 
             Spacer(Modifier.height(34.dp))
 
-            PowerButton(connected = connected, connecting = connecting, onClick = onToggle)
+            PowerButton(
+                connected = connected && !probe.dead,
+                connecting = connecting,
+                onClick = onToggle
+            )
 
             Spacer(Modifier.height(22.dp))
+
+            // «متصل» یعنی هسته بالا آمده، نه اینکه ترافیک رد می‌شود. تا
+            // وقتی بررسی تأیید نکرده، ادعای اتصال موفق نمی‌کنیم.
+            val tunnelDead = connected && probe.dead
+            val verifying = connected && probe.checking
 
             Text(
                 when {
                     connecting -> T.connecting
                     failed -> T.failed
+                    tunnelDead -> T.connectedNoTraffic
+                    verifying -> T.verifying
                     connected -> T.connected
                     else -> T.notConnected
                 },
                 style = MaterialTheme.typography.titleMedium,
                 color = when {
-                    failed -> NaranColors.Dead
+                    failed || tunnelDead -> NaranColors.Dead
+                    verifying -> NaranColors.Warn
                     connected -> NaranColors.Live
                     else -> NaranColors.Muted
-                }
+                },
+                textAlign = TextAlign.Center
             )
 
-            if (failed) {
+            if (failed || tunnelDead) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    errorText.ifBlank { T.failedHint },
+                    if (tunnelDead) T.connectedNoTrafficHint
+                    else errorText.ifBlank { T.failedHint },
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 24.dp)
@@ -408,7 +440,10 @@ private fun ProbeRow(probe: NaranProbe.Result, onRefresh: () -> Unit) {
         Column(Modifier.weight(1f)) {
             when {
                 probe.checking -> Text(
-                    T.checking, style = MaterialTheme.typography.titleMedium
+                    if (probe.attempts > 1)
+                        T.checking + " (" + T.num(probe.attempts) + ")"
+                    else T.checking,
+                    style = MaterialTheme.typography.titleMedium
                 )
                 good && probe.ip.isNotBlank() -> {
                     Text(
@@ -759,28 +794,73 @@ fun BackButton(onClick: () -> Unit) {
     }
 }
 
-/** پس‌زمینه‌ی همه‌ی صفحات: شب عمیق با تابش ملایم از بالا. */
+/**
+ * پس‌زمینه‌ی همه‌ی صفحات.
+ *
+ * نور آرام جابه‌جا می‌شود تا صفحه زنده به نظر برسد. دوره‌اش ۱۴ ثانیه
+ * است — به‌قدری کند که حواس را پرت نکند.
+ */
 @Composable
 fun ScreenBackground(content: @Composable BoxScope.() -> Unit) {
+    val phase = rememberNeonPhase()
+
     Box(
         Modifier
             .fillMaxSize()
             .background(NaranColors.Night)
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(360.dp)
-                .align(Alignment.TopCenter)
-                .background(NaranColors.screenGlow)
-        )
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(260.dp)
-                .align(Alignment.BottomCenter)
-                .background(NaranColors.screenGlowLow)
-        )
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(NaranColors.animatedGlow(phase, size.width, size.height))
+            drawRect(
+                NaranColors.animatedGlow(
+                    phase + 3.14f, size.width, size.height * 2.4f
+                )
+            )
+        }
+        content()
+    }
+}
+
+/**
+ * همان پس‌زمینه، ولی با کشیدن به پایین رفرش می‌کند.
+ *
+ * جدا نگه داشته شده چون همه‌ی صفحات رفرش لازم ندارند و اضافه کردن
+ * nestedScroll بی‌دلیل، اسکرول را سنگین می‌کند.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefreshableBackground(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val phase = rememberNeonPhase()
+    // یک state مشترک بین جعبه و نشانگر، وگرنه نشانگر با کشش هماهنگ نیست
+    val pullState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = onRefresh,
+        state = pullState,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(NaranColors.Night),
+        indicator = {
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = NaranColors.Surface,
+                color = NaranColors.Glow
+            )
+        }
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(NaranColors.animatedGlow(phase, size.width, size.height))
+            drawRect(
+                NaranColors.animatedGlow(phase + 3.14f, size.width, size.height * 2.4f)
+            )
+        }
         content()
     }
 }
@@ -900,29 +980,40 @@ private fun PowerButton(connected: Boolean, connecting: Boolean, onClick: () -> 
 
 @Composable
 private fun Lamp(big: Boolean = false) {
+    val phase = rememberNeonPhase()
+    // نور برند نفس می‌کشد و رنگش بین کهربایی و بنفش می‌چرخد
+    val breathe = 0.5f + 0.5f * kotlin.math.sin(phase * 2.0).toFloat()
     val s = if (big) 18.dp else 11.dp
+
     Box(contentAlignment = Alignment.Center) {
         Box(
             Modifier
-                .size(s * 4)
+                .size(s * (3.4f + breathe * 0.8f))
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            NaranColors.Glow.copy(alpha = 0.38f),
-                            NaranColors.Violet.copy(alpha = 0.20f),
-                            NaranColors.Cyan.copy(alpha = 0.10f),
+                            NaranColors.Glow.copy(alpha = 0.22f + breathe * 0.20f),
+                            NaranColors.Violet.copy(alpha = 0.10f + breathe * 0.14f),
+                            NaranColors.Cyan.copy(alpha = 0.08f),
                             Color.Transparent
                         )
                     )
                 )
-                .blur(10.dp)
+                .blur(11.dp)
         )
         Box(
             Modifier
                 .size(s)
                 .clip(CircleShape)
-                .background(NaranColors.powerOn)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            NaranColors.GlowHot,
+                            lerp(NaranColors.Glow, NaranColors.Violet, breathe * 0.45f)
+                        )
+                    )
+                )
         )
     }
 }

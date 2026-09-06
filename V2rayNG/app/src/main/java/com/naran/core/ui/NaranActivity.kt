@@ -38,6 +38,32 @@ class NaranActivity : ComponentActivity() {
     /** برای اینکه تغییر زبان بلافاصله دیده شود. */
     private val langTick = mutableStateOf(0)
 
+    /**
+     * مجوز اعلان — از اندروید ۱۳ به بعد لازم است.
+     *
+     * اجباری نیست: اگر کاربر رد کند اپ کامل کار می‌کند و فقط نوتیفیکیشن
+     * وضعیت را نمی‌بیند. برای همین یک بار می‌پرسیم و دیگر تکرار نمی‌کنیم.
+     */
+    private val notifyPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        NaranLog.i("مجوز", if (granted) "اعلان مجاز شد" else "اعلان رد شد")
+    }
+
+    private fun askNotifyPermissionOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (NaranStore.notifyAsked) return
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.POST_NOTIFICATIONS
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) return
+
+        NaranStore.notifyAsked = true
+        runCatching {
+            notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     private val vpnPermission = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -84,6 +110,8 @@ class NaranActivity : ComponentActivity() {
             NaranManager.sync(force = true)
             NaranManager.flushUsage()
             NaranSubs.refreshAll(force = true)     // هر بار باز شدن اپ
+            delay(900)                             // اول صفحه بیاید بالا
+            askNotifyPermissionOnce()
         }
     }
 
@@ -172,6 +200,7 @@ class NaranActivity : ComponentActivity() {
         var showSubs by remember { mutableStateOf(false) }
         var searching by remember { mutableStateOf(false) }
         var pingingSub by remember { mutableStateOf<String?>(null) }
+        var refreshing by remember { mutableStateOf(false) }
         var autoTried by remember { mutableStateOf(false) }
 
         val snackbar = remember { SnackbarHostState() }
@@ -212,7 +241,14 @@ class NaranActivity : ComponentActivity() {
             if (running) {
                 NaranTraffic.start(lifecycleScope)
                 delay(1500)          // فرصت به تونل تا بالا بیاید
-                NaranProbe.run()
+                NaranProbe.run(attempts = 3)
+
+                // اگر بعد از سه تلاش ترافیک رد نشد، سرور اهدایی را
+                // به پنل گزارش کن تا برای بقیه هم کنار گذاشته شود
+                if (NaranProbe.result.value.dead) {
+                    selected?.let { NaranManager.trackFailure(it) }
+                    NaranManager.flushUsage()
+                }
             } else {
                 NaranTraffic.stop()
                 NaranProbe.clear()
@@ -339,6 +375,21 @@ class NaranActivity : ComponentActivity() {
                     onPickServer = { showPicker = true },
                     onRefreshProbe = { lifecycleScope.launch { NaranProbe.run() } },
                     onPing = { NaranServiceState.requestPing(this@NaranActivity) },
+                    refreshing = refreshing,
+                    onRefresh = {
+                        if (!refreshing) {
+                            refreshing = true
+                            scope.launch {
+                                // همه‌چیز یکجا: کانفیگ عمومی، اطلاعیه،
+                                // بلاک‌لیست، نسخه، و لینک‌های ساب
+                                NaranManager.sync(force = true)
+                                NaranSubs.refreshAll(force = true)
+                                NaranManager.flushUsage()
+                                refreshing = false
+                                snackbar.showSnackbar(T.refreshDone)
+                            }
+                        }
+                    },
                     onSettings = { showSettings = true },
                     onOpenChannel = ::openLink
                 )

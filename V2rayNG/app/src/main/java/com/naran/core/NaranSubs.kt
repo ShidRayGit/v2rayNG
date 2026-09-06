@@ -214,15 +214,62 @@ object NaranSubs {
         } else raw
     }.getOrDefault(raw)
 
-    /** محتوای ساب یا base64 است یا خط‌به‌خط لینک. */
+    /**
+     * محتوای ساب را می‌خواند.
+     *
+     * پنل‌ها سه جور جواب می‌دهند: متن خام، base64 استاندارد، یا base64
+     * بدون padding. مورد آخر شایع است و همان بود که کار را می‌شکست —
+     * Base64.decode اندروید بدون «=» انتهایی استثنا پرتاب می‌کند.
+     *
+     * الفبای URL-safe را هم جدا امتحان می‌کنیم، چون DEFAULT و URL_SAFE
+     * را نمی‌شود با OR ترکیب کرد؛ نتیجه‌اش فقط URL_SAFE می‌شود و هرجا
+     * «+» یا «/» در داده باشد خراب می‌کند.
+     */
     private fun parse(body: String): List<SubConfig> {
         val text = body.trim()
-        val decoded = if (text.contains("://")) text else runCatching {
-            String(Base64.decode(text.replace("\n", "").replace("\r", ""),
-                Base64.DEFAULT or Base64.URL_SAFE))
-        }.getOrDefault("")
+        if (text.isEmpty()) {
+            NaranLog.w("ساب", "پاسخ خالی بود")
+            return emptyList()
+        }
 
-        return decoded.lines()
+        val candidates = mutableListOf<String>()
+
+        // ۱. متن خام
+        if (text.contains("://")) candidates.add(text)
+
+        // ۲. base64، با هر دو الفبا و با padding اصلاح‌شده
+        val packed = text.filterNot { it == '\n' || it == '\r' || it == ' ' }
+        val padded = packed + "=".repeat((4 - packed.length % 4) % 4)
+        for (flags in listOf(
+            Base64.NO_WRAP,
+            Base64.NO_WRAP or Base64.URL_SAFE,
+            Base64.DEFAULT
+        )) {
+            val out = runCatching { String(Base64.decode(padded, flags)) }.getOrNull()
+            if (out != null && out.contains("://")) candidates.add(out)
+        }
+
+        // ۳. بعضی پنل‌ها هر خط را جدا base64 می‌کنند
+        val perLine = text.lines().mapNotNull { line ->
+            val t = line.trim()
+            if (t.isEmpty()) return@mapNotNull null
+            val pad = t + "=".repeat((4 - t.length % 4) % 4)
+            runCatching { String(Base64.decode(pad, Base64.NO_WRAP)) }
+                .getOrNull()?.takeIf { it.contains("://") }
+        }
+        if (perLine.isNotEmpty()) candidates.add(perLine.joinToString("\n"))
+
+        if (candidates.isEmpty()) {
+            // متن خام را کوتاه و سانسورشده ثبت کن تا عیب‌یابی ممکن باشد
+            NaranLog.e("ساب", "خوانده نشد — " + text.length + " بایت، شروع: " +
+                NaranLog.redact(text.take(80)))
+            return emptyList()
+        }
+
+        // رمزگشایی اشتباه گاهی یک «://» تصادفی می‌سازد و اگر اولین را
+        // برداریم برنده می‌شود. پس همه را می‌سنجیم و پرمحصول‌ترین را
+        // برمی‌داریم.
+        fun harvest(src: String): List<SubConfig> = src.lines()
             .map { it.trim() }
             .filter { it.contains("://") && it.length > 12 }
             .map { line ->
@@ -232,6 +279,16 @@ object NaranSubs {
                 SubConfig(raw = line, name = name)
             }
             .distinctBy { it.raw }
+
+        val out = candidates.map(::harvest).maxByOrNull { it.size } ?: emptyList()
+
+        if (out.isEmpty()) {
+            NaranLog.e("ساب", "رمزگشایی شد ولی کانفیگ معتبری نداشت")
+            return emptyList()
+        }
+
+        NaranLog.i("ساب", out.size.toString() + " کانفیگ خوانده شد")
+        return out
     }
 
     // ── مرتب‌سازی ──

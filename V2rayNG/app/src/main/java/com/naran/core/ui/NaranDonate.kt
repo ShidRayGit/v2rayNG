@@ -47,10 +47,10 @@ fun DonateScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(
+    ScreenBackground {
+      Column(
         Modifier
             .fillMaxSize()
-            .background(NaranColors.Night)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
@@ -140,6 +140,7 @@ fun DonateScreen(
         }
 
         Spacer(Modifier.height(36.dp))
+    }
     }
 }
 

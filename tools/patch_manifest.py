@@ -143,6 +143,16 @@ if tile_src.is_file():
     if n:
         src = src2
 
+# ── مجوز اعلان، لازم برای اندروید ۱۳ به بعد ──
+if "POST_NOTIFICATIONS" not in src:
+    m = re.search(r"(<manifest[^>]*>)", src)
+    if m:
+        src = src[:m.end()] + (
+            '\n    <uses-permission '
+            'android:name="android.permission.POST_NOTIFICATIONS" />'
+        ) + src[m.end():]
+        did.append("مجوز اعلان")
+
 # ── ۵. سخت‌سازی ──
 if 'android:allowBackup="true"' in src:
     src = src.replace('android:allowBackup="true"', 'android:allowBackup="false"')

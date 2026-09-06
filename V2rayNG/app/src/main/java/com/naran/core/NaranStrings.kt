@@ -95,6 +95,27 @@ object T {
     val internetOpen get() = pick("Internet is open", "اینترنت باز است")
     val tunnelUnverified get() = pick("Tunnel not verified", "تونل تأیید نشد")
     val notTunneled get() = pick("Traffic isn't going through", "ترافیک رد نمی‌شود")
+    val connectedNoTraffic get() = pick(
+        "Connected, but nothing gets through",
+        "متصل شد، ولی ترافیک رد نمی‌شود"
+    )
+    val connectedNoTrafficHint get() = pick(
+        "This server looks dead. Pick another one.",
+        "این سرور جواب نمی‌دهد. سرور دیگری را انتخاب کنید."
+    )
+    val verifying get() = pick("Checking connection…", "در حال بررسی اتصال…")
+    val refresh get() = pick("Refresh", "به‌روزرسانی")
+    val refreshing get() = pick("Refreshing…", "در حال به‌روزرسانی…")
+    val refreshDone get() = pick("Up to date", "به‌روز شد")
+    val notifyPermTitle get() = pick("Allow notifications?", "اعلان‌ها مجاز باشند؟")
+    val notifyPermBody get() = pick(
+        "Naran shows connection status and speed in a notification. " +
+            "You can skip this — the app works either way.",
+        "ناران وضعیت اتصال و سرعت را در اعلان نشان می‌دهد. " +
+            "می‌توانید رد کنید؛ اپ به‌هرحال کار می‌کند."
+    )
+    val allow get() = pick("Allow", "اجازه بده")
+    val notNow get() = pick("Not now", "الان نه")
     val sameIp get() = pick(
         "Your address hasn't changed — tunnel has no effect",
         "آدرس شما عوض نشده — تونل بی‌اثر است"

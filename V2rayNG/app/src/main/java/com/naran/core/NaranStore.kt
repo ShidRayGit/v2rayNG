@@ -40,6 +40,7 @@ object NaranStore {
     private const val K_NOTICE_SEEN = "notices_seen"
     private const val K_BLOCK_SHOT = "block_screenshot"
     private const val K_NOTIFY_SPEED = "notify_speed"
+    private const val K_NOTIFY_ASKED = "notify_asked"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -312,10 +313,15 @@ object NaranStore {
         get() = p().getBoolean(K_BLOCK_SHOT, false)
         set(v) = p().edit().putBoolean(K_BLOCK_SHOT, v).apply()
 
-    /** نمایش سرعت در نوتیفیکیشن. */
+    /** نمایش سرعت در نوتیفیکیشن. پیش‌فرض روشن. */
     var notifySpeed: Boolean
-        get() = p().getBoolean(K_NOTIFY_SPEED, false)
+        get() = p().getBoolean(K_NOTIFY_SPEED, true)
         set(v) = p().edit().putBoolean(K_NOTIFY_SPEED, v).apply()
+
+    /** یک بار مجوز اعلان را پرسیده‌ایم؛ دوباره مزاحم نشویم. */
+    var notifyAsked: Boolean
+        get() = p().getBoolean(K_NOTIFY_ASKED, false)
+        set(v) = p().edit().putBoolean(K_NOTIFY_ASKED, v).apply()
 
     fun wipe() = p().edit().clear().apply()
 }

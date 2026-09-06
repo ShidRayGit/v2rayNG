@@ -42,10 +42,10 @@ fun LogScreen(onBack: () -> Unit) {
         if (entries.isNotEmpty()) listState.animateScrollToItem(entries.size - 1)
     }
 
-    Column(
+    ScreenBackground {
+      Column(
         Modifier
             .fillMaxSize()
-            .background(NaranColors.Night)
             .padding(horizontal = 16.dp)
     ) {
         Spacer(Modifier.height(24.dp))
@@ -167,5 +167,6 @@ fun LogScreen(onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             ) { Text(T.clear, color = NaranColors.Muted) }
         }
+    }
     }
 }
