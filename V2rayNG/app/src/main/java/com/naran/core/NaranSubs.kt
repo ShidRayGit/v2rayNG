@@ -77,6 +77,41 @@ data class Subscription(
 }
 
 /**
+ * اسم نمایشی یک لینک کانفیگ.
+ *
+ * لینک vmess تگ «#» ندارد — payloadش یک JSON کدشده با base64 است و اسم
+ * داخل فیلد ps نشسته. بدون باز کردن آن، چهارده کاراکتر اول رشته‌ی
+ * base64 نمایش داده می‌شد.
+ */
+fun configName(raw: String): String {
+    val line = raw.trim()
+
+    // بعضی پنل‌ها روی vmess هم تگ می‌گذارند؛ آن اولویت دارد
+    val tag = if ("#" in line) line.substringAfterLast("#") else ""
+    if (tag.isNotBlank()) {
+        return runCatching { java.net.URLDecoder.decode(tag, "UTF-8") }
+            .getOrDefault(tag).trim().take(48)
+    }
+
+    if (line.startsWith("vmess://", ignoreCase = true)) {
+        val name = runCatching {
+            val body = line.substringAfter("://").substringBefore("#")
+                .filterNot { it == '\n' || it == '\r' || it == ' ' }
+            val padded = body + "=".repeat((4 - body.length % 4) % 4)
+            val json = JSONObject(String(Base64.decode(padded, Base64.NO_WRAP)))
+            // ps نام رایج است، remarks را بعضی تولیدکننده‌ها می‌گذارند
+            json.optString("ps").ifBlank { json.optString("remarks") }
+        }.getOrNull()
+        if (!name.isNullOrBlank()) return name.trim().take(48)
+    }
+
+    // آخرین راه: میزبان، که از رشته‌ی base64 خواناتر است
+    val host = line.substringAfter("://").substringAfter("@")
+        .substringBefore(":").substringBefore("/").substringBefore("?")
+    return host.ifBlank { line.substringAfter("://").take(14) }
+}
+
+/**
  * شناسه‌ی پایدار یک کانفیگ ساب.
  *
  * از هش لینک و شناسه‌ی ساب ساخته می‌شود تا بین اجراها ثابت بماند و با
@@ -290,12 +325,7 @@ object NaranSubs {
         fun harvest(src: String): List<SubConfig> = src.lines()
             .map { it.trim() }
             .filter { it.contains("://") && it.length > 12 }
-            .map { line ->
-                val name = line.substringAfterLast("#", "").let {
-                    runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
-                }.ifBlank { line.substringAfter("://").take(14) }
-                SubConfig(raw = line, name = name)
-            }
+            .map { line -> SubConfig(raw = line, name = configName(line)) }
             .distinctBy { it.raw }
 
         val out = candidates.map(::harvest).maxByOrNull { it.size } ?: emptyList()

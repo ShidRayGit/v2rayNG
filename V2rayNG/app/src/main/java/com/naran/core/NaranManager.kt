@@ -137,13 +137,10 @@ object NaranManager {
         val existing = NaranStore.manualConfigs()
         val known = existing.map { it.raw }.toSet()
         val fresh = lines.filterNot { it in known }.mapIndexed { i, raw ->
-            val tag = raw.substringAfterLast("#", "").let {
-                runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
-            }
             NaranConfig(
                 // فضای شناسه‌ی جدا، تا با لایسنس و ساب برخورد نکند
                 id = 800_000 + Math.abs(raw.hashCode() % 90_000) + i,
-                name = tag.ifBlank { raw.substringAfter("://").take(16) },
+                name = configName(raw),
                 location = "", flag = "",
                 protocol = raw.substringBefore("://"),
                 raw = raw
