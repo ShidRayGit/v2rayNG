@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.naran.core.NaranBridge
 import com.naran.core.NaranManager
 import com.naran.core.NaranRelease
 import com.naran.core.NaranStore
@@ -41,6 +42,7 @@ fun SettingsScreen(
     onLanguageChanged: () -> Unit
 ) {
     var auto by remember { mutableStateOf(NaranStore.autoConnect) }
+    var speed by remember { mutableStateOf(NaranStore.notifySpeed) }
     var lang by remember { mutableStateOf(T.lang) }
     val (channelName, channelUrl) = remember(lang) { NaranManager.channel() }
     val licenses by NaranManager.licenses.collectAsState()
@@ -55,9 +57,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                    Text(T.back, color = NaranColors.Glow)
-                }
+                BackButton(onBack)
                 Spacer(Modifier.weight(1f))
                 Text(T.settings, style = MaterialTheme.typography.titleLarge)
             }
@@ -70,6 +70,13 @@ fun SettingsScreen(
                     subtitle = T.autoConnectSub,
                     checked = auto,
                     onChange = { auto = it; NaranStore.autoConnect = it }
+                )
+                Line()
+                ToggleRow(
+                    title = T.showSpeed,
+                    subtitle = T.showSpeedSub,
+                    checked = speed,
+                    onChange = { speed = it; NaranBridge.setSpeedNotification(it) }
                 )
                 Line()
                 ActionRow(T.perApp, T.perAppSub, onClick = onPerApp)

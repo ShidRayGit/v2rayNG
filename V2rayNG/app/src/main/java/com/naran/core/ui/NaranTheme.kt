@@ -50,16 +50,32 @@ object NaranColors {
 
     // ── گرادیان‌ها ──
 
+    /** تابش بالای صفحه: کهربایی به بنفش به فیروزه‌ای. */
     val screenGlow = Brush.radialGradient(
-        colors = listOf(Color(0x1AFFC46B), Color(0x0D3DE0D5), Color.Transparent),
-        radius = 1400f
+        colors = listOf(
+            Color(0x24FFC46B), Color(0x1A8B5CF6), Color(0x0F3DE0D5), Color.Transparent
+        ),
+        radius = 1500f
+    )
+
+    /** تابش پایین صفحه، تا کادر خالی نماند. */
+    val screenGlowLow = Brush.radialGradient(
+        colors = listOf(Color(0x148B5CF6), Color(0x0A3DE0D5), Color.Transparent),
+        radius = 1100f
     )
 
     val powerOn = Brush.linearGradient(listOf(GlowHot, Glow))
 
     val edgeLit = Brush.linearGradient(
-        listOf(Glow.copy(alpha = 0.55f), Cyan.copy(alpha = 0.35f))
+        listOf(
+            Glow.copy(alpha = 0.60f),
+            Violet.copy(alpha = 0.45f),
+            Cyan.copy(alpha = 0.35f)
+        )
     )
+
+    /** هاله‌ی دکمه‌ی اتصال — سه‌رنگ، تا زنده‌تر بزند. */
+    val haloOn = Brush.linearGradient(listOf(GlowHot, Violet, Cyan))
 
     val cardLit = Brush.linearGradient(
         listOf(Color(0xFF1A2338), Color(0xFF121A2C))
@@ -67,8 +83,11 @@ object NaranColors {
 
     /** بخش عمومی، تا از سرورهای شخصی جدا دیده شود. */
     val publicTint = Brush.linearGradient(
-        listOf(Cyan.copy(alpha = 0.10f), Violet.copy(alpha = 0.06f))
+        listOf(Cyan.copy(alpha = 0.13f), Violet.copy(alpha = 0.10f))
     )
+
+    /** دکمه‌ی برجسته‌ی ثانویه — بنفش به فیروزه‌ای. */
+    val accentCool = Brush.linearGradient(listOf(Violet, Cyan))
 }
 
 private val Scheme = darkColorScheme(

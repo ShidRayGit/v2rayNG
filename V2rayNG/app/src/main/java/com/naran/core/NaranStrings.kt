@@ -112,6 +112,10 @@ object T {
     val publicSub get() = pick("Shared by the community", "اهدایی کاربران")
     val noServers get() = pick("No servers yet", "هنوز سروری ندارید")
     val addCode get() = pick("Enter a new code", "وارد کردن کد جدید")
+    // کوتاه، برای دکمه‌های کنار هم که جا تنگ است
+    val addCodeShort get() = pick("Code", "کد")
+    val subsShort get() = pick("Subs", "ساب")
+    val donateShort get() = pick("Share", "اهدا")
     val findServer get() = pick("Find a server", "جستجوی کانفیگ")
     val searching get() = pick("Searching…", "در حال جستجو…")
     val active get() = pick("active", "فعال")
@@ -163,6 +167,20 @@ object T {
     val subAllowedList get() = pick("Allowed sources:", "منابع مجاز:")
     val sortByBest get() = pick("Sort by best", "مرتب‌سازی خودکار")
     val pingAll get() = pick("Ping all", "تست همه")
+    fun pingProgress(done: Any, total: Any) =
+        pick("Testing ${num(done)}/${num(total)}", "تست ${num(done)} از ${num(total)}")
+    val pingNeedsConnect get() = pick(
+        "Connect first to test this server",
+        "برای تست این سرور اول وصل شوید"
+    )
+    val testPing get() = pick("Test latency", "تست تأخیر")
+    val showSpeed get() = pick("Speed in notification", "سرعت در نوتیفیکیشن")
+    val showSpeedSub get() = pick(
+        "Updates every 3 seconds while connected",
+        "هنگام اتصال هر ۳ ثانیه به‌روز می‌شود"
+    )
+    val hideSpeed get() = pick("Hide speed", "پنهان کردن سرعت")
+    val disconnectAction get() = pick("Disconnect", "قطع اتصال")
     val updateNow get() = pick("Update now", "به‌روزرسانی")
     val updated get() = pick("Updated", "به‌روز شد")
     fun subUsage(used: String, total: String) =

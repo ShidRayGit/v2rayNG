@@ -38,6 +38,8 @@ object NaranStore {
     private const val K_SUBS = "subscriptions"
     private const val K_BLOCKS_OFF = "blocks_disabled"
     private const val K_NOTICE_SEEN = "notices_seen"
+    private const val K_BLOCK_SHOT = "block_screenshot"
+    private const val K_NOTIFY_SPEED = "notify_speed"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -304,6 +306,16 @@ object NaranStore {
         all.forEach { arr.put(it) }
         p().edit().putString(K_NOTICE_SEEN, arr.toString()).apply()
     }
+
+    /** ممنوعیت اسکرین‌شات — از پنل می‌آید، پیش‌فرض آزاد. */
+    var blockScreenshot: Boolean
+        get() = p().getBoolean(K_BLOCK_SHOT, false)
+        set(v) = p().edit().putBoolean(K_BLOCK_SHOT, v).apply()
+
+    /** نمایش سرعت در نوتیفیکیشن. */
+    var notifySpeed: Boolean
+        get() = p().getBoolean(K_NOTIFY_SPEED, false)
+        set(v) = p().edit().putBoolean(K_NOTIFY_SPEED, v).apply()
 
     fun wipe() = p().edit().clear().apply()
 }

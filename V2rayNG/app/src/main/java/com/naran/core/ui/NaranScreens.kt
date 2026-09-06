@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naran.core.*
@@ -48,6 +49,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun LicenseScreen(
+    canGoBack: Boolean,
+    onBack: () -> Unit,
     onActivated: () -> Unit,
     onOpenChannel: (String) -> Unit
 ) {
@@ -66,7 +69,14 @@ fun LicenseScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(64.dp))
+            Spacer(Modifier.height(20.dp))
+
+            // اگر کاربر از جای دیگری آمده، راه برگشت داشته باشد
+            Row(Modifier.fillMaxWidth()) {
+                if (canGoBack) BackButton(onBack)
+            }
+
+            Spacer(Modifier.height(if (canGoBack) 30.dp else 44.dp))
             Lamp(big = true)
             Spacer(Modifier.height(20.dp))
 
@@ -163,6 +173,7 @@ fun ConnectScreen(
     onToggle: () -> Unit,
     onPickServer: () -> Unit,
     onRefreshProbe: () -> Unit,
+    onPing: () -> Boolean,
     onSettings: () -> Unit,
     onOpenChannel: (String) -> Unit
 ) {
@@ -288,6 +299,9 @@ fun ConnectScreen(
                 ProbeRow(probe, onRefreshProbe)
 
                 Spacer(Modifier.height(10.dp))
+                LatencyRow(onPing)
+
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Metric(T.download, NaranTraffic.speed(traffic.downBps),
                         NaranColors.Cyan, Modifier.weight(1f))
@@ -309,6 +323,61 @@ fun ConnectScreen(
             Spacer(Modifier.height(20.dp))
             NaranManager.adsFor("connect").forEach { AdBanner(it, onOpenChannel) }
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/**
+ * تست تأخیر سرور فعلی.
+ *
+ * هسته فقط تونل فعال را می‌سنجد، پس این فقط وقتی وصل باشیم معنی دارد و
+ * برای همین اینجاست، نه در فهرست سرورها.
+ */
+@Composable
+private fun LatencyRow(onPing: () -> Boolean) {
+    var pinging by remember { mutableStateOf(false) }
+    var ms by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(pinging) {
+        if (!pinging) return@LaunchedEffect
+        val r = withTimeoutOrNull(12_000) { NaranServiceState.ping.first() }
+        ms = r ?: -1L
+        pinging = false
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(15.dp))
+            .background(NaranColors.Surface)
+            .border(1.dp, NaranColors.Edge, RoundedCornerShape(15.dp))
+            .clickable(enabled = !pinging) {
+                ms = null
+                pinging = onPing()
+            }
+            .padding(15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PingMark()
+            Spacer(Modifier.width(11.dp))
+            Text(T.testPing, style = MaterialTheme.typography.titleMedium)
+        }
+        when {
+            pinging -> CircularProgressIndicator(
+                Modifier.size(17.dp), strokeWidth = 2.dp, color = NaranColors.Muted
+            )
+            ms != null -> Text(
+                if (ms!! > 0) T.num(ms!!) + " ms" else "—",
+                style = MaterialTheme.typography.titleMedium,
+                color = when {
+                    ms!! <= 0 -> NaranColors.Dead
+                    ms!! < 300 -> NaranColors.Live
+                    else -> NaranColors.Warn
+                }
+            )
+            else -> Text("—", color = NaranColors.Muted)
         }
     }
 }
@@ -350,7 +419,7 @@ private fun ProbeRow(probe: NaranProbe.Result, onRefresh: () -> Unit) {
                     Text(
                         probe.note.ifBlank { probe.country.ifBlank { T.verified } },
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (probe.ipv6Leak) NaranColors.Warn else NaranColors.Muted
+                        color = NaranColors.Muted
                     )
                 }
                 good -> {
@@ -463,7 +532,12 @@ fun ServerSheet(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp)
-            ) { Text(T.addCode, color = NaranColors.Text, fontSize = 12.sp) }
+            ) {
+                Text(
+                    T.addCodeShort, color = NaranColors.Text, fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
 
             OutlinedButton(
                 onClick = onSubs,
@@ -472,7 +546,12 @@ fun ServerSheet(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp)
-            ) { Text(T.subscriptions, color = NaranColors.Text, fontSize = 12.sp) }
+            ) {
+                Text(
+                    T.subsShort, color = NaranColors.Text, fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
 
             OutlinedButton(
                 onClick = onDonate,
@@ -481,7 +560,12 @@ fun ServerSheet(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp)
-            ) { Text(T.donate, color = NaranColors.Cyan, fontSize = 12.sp) }
+            ) {
+                Text(
+                    T.donateShort, color = NaranColors.Cyan, fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -611,7 +695,6 @@ private fun ServerRow(
                         .defaultMinSize(minWidth = 46.dp, minHeight = 38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = !pinging) {
-                            // اگر وصل نیستیم، اسپینر بی‌خود نچرخد
                             pingMs = null
                             pinging = onPing(c)
                             if (!pinging) pingMs = -1L
@@ -648,6 +731,34 @@ private fun ServerRow(
 
 // ────────────────────────── اجزای مشترک ──────────────────────────
 
+/**
+ * دکمه‌ی بازگشت.
+ *
+ * قبلاً یک TextButton ساده بود و در صفحه گم می‌شد. حالا کادر و
+ * پس‌زمینه دارد تا جای زدنش مشخص باشد.
+ */
+@Composable
+fun BackButton(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(NaranColors.Raise)
+            .border(1.dp, NaranColors.Edge, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            if (T.isRtl) "→" else "←",
+            color = NaranColors.Glow,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(T.back, color = NaranColors.Text, fontSize = 14.sp)
+    }
+}
+
 /** پس‌زمینه‌ی همه‌ی صفحات: شب عمیق با تابش ملایم از بالا. */
 @Composable
 fun ScreenBackground(content: @Composable BoxScope.() -> Unit) {
@@ -659,8 +770,16 @@ fun ScreenBackground(content: @Composable BoxScope.() -> Unit) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(340.dp)
+                .height(360.dp)
+                .align(Alignment.TopCenter)
                 .background(NaranColors.screenGlow)
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .align(Alignment.BottomCenter)
+                .background(NaranColors.screenGlowLow)
         )
         content()
     }
@@ -730,7 +849,8 @@ private fun PowerButton(connected: Boolean, connecting: Boolean, onClick: () -> 
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            NaranColors.Glow.copy(alpha = alpha * 0.30f),
+                            NaranColors.Glow.copy(alpha = alpha * 0.34f),
+                            NaranColors.Violet.copy(alpha = alpha * 0.22f),
                             NaranColors.Cyan.copy(alpha = alpha * 0.10f),
                             Color.Transparent
                         )
@@ -744,14 +864,8 @@ private fun PowerButton(connected: Boolean, connecting: Boolean, onClick: () -> 
                 .size(184.dp)
                 .clip(CircleShape)
                 .background(
-                    if (lit) Brush.linearGradient(
-                        listOf(
-                            NaranColors.Glow.copy(alpha = 0.55f),
-                            NaranColors.Cyan.copy(alpha = 0.35f)
-                        )
-                    ) else Brush.linearGradient(
-                        listOf(NaranColors.Edge, NaranColors.Edge)
-                    )
+                    if (lit) NaranColors.haloOn
+                    else Brush.linearGradient(listOf(NaranColors.Edge, NaranColors.Edge))
                 )
         )
         // دکمه
@@ -795,8 +909,9 @@ private fun Lamp(big: Boolean = false) {
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            NaranColors.Glow.copy(alpha = 0.35f),
-                            NaranColors.Cyan.copy(alpha = 0.12f),
+                            NaranColors.Glow.copy(alpha = 0.38f),
+                            NaranColors.Violet.copy(alpha = 0.20f),
+                            NaranColors.Cyan.copy(alpha = 0.10f),
                             Color.Transparent
                         )
                     )

@@ -7,8 +7,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.net.Inet4Address
-import java.net.Inet6Address
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,7 +28,6 @@ object NaranProbe {
         val ip: String = "",
         val country: String = "",
         val flag: String = "",
-        val ipv6Leak: Boolean = false,   // IPv6 از تونل رد نمی‌شود
         val note: String = ""
     )
 
@@ -44,23 +41,10 @@ object NaranProbe {
         .retryOnConnectionFailure(false)
         .build()
 
-    /** بیرون از تونل، برای مقایسه. */
-    private val direct = OkHttpClient.Builder()
-        .connectTimeout(6, TimeUnit.SECONDS)
-        .readTimeout(6, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(false)
-        .socketFactory(NaranDirect.socketFactory)
-        .dns { host -> NaranDirect.resolve(host) }
-        .build()
-
     private val PROBES = listOf(
         "https://www.gstatic.com/generate_204",
         "https://cp.cloudflare.com/generate_204"
     )
-
-    // نسخه‌های خانواده‌محور، برای تشخیص نشت
-    private const val V4_ONLY = "https://ipv4.icanhazip.com"
-    private const val V6_ONLY = "https://ipv6.icanhazip.com"
 
     fun clear() { _result.value = Result() }
 
@@ -81,57 +65,18 @@ object NaranProbe {
             return@withContext
         }
 
-        val throughTunnel = lookup(tunneled)
-        val outsideTunnel = lookup(direct)
-
-        // اگر هر دو یکی باشند، تونل عملاً بی‌اثر است
-        if (throughTunnel.first.isNotBlank() &&
-            throughTunnel.first == outsideTunnel.first
-        ) {
-            _result.value = Result(
-                verified = false, checking = false,
-                ip = throughTunnel.first,
-                note = T.sameIp
-            )
-            NaranLog.w("بررسی", "آدرس داخل و بیرون تونل یکی است")
-            return@withContext
-        }
-
-        val leak = detectIpv6Leak()
-        if (leak) {
-            NaranLog.w("بررسی", "نشت IPv6 — بسته شد")
-            NaranDirect.blockIpv6 = true
-        }
+        // مقایسه‌ی «داخل تونل با بیرون تونل» را برداشتیم: راه مطمئنی برای
+        // بیرون بردن یک سوکت از تونل روی همه‌ی گوشی‌ها نبود، پس هر دو
+        // درخواست از تونل می‌رفتند و همیشه یکی درمی‌آمدند — هشدار کاذب.
+        // حالا فقط دسترسی و آدرس خروجی را نشان می‌دهیم.
+        val exit = lookup(tunneled)
 
         _result.value = Result(
             verified = true, checking = false,
-            ip = throughTunnel.first,
-            country = throughTunnel.second,
-            flag = throughTunnel.third,
-            ipv6Leak = leak,
-            note = if (leak) T.ipv6Blocked else ""
+            ip = exit.first, country = exit.second, flag = exit.third
         )
-        NaranLog.i("بررسی", "خروجی تأیید شد" + if (leak) " (IPv6 بسته شد)" else "")
+        NaranLog.i("بررسی", "خروجی تأیید شد")
     }
-
-    /**
-     * نشت IPv6: وقتی آدرس IPv6ای که از تونل می‌گیریم همان است که بدون
-     * تونل داریم. یعنی ترافیک IPv6 دور تونل می‌زند.
-     *
-     * اگر خود کانفیگ IPv6 باشد این اتفاق نمی‌افتد، چون آن‌وقت آدرس‌ها
-     * فرق می‌کنند — پس کانفیگ‌های IPv6-only بی‌دلیل مسدود نمی‌شوند.
-     */
-    private fun detectIpv6Leak(): Boolean {
-        val viaTunnel = plainGet(tunneled, V6_ONLY) ?: return false
-        val viaDirect = plainGet(direct, V6_ONLY) ?: return false
-        return viaTunnel.isNotBlank() && viaTunnel == viaDirect
-    }
-
-    private fun plainGet(client: OkHttpClient, url: String): String? = runCatching {
-        client.newCall(Request.Builder().url(url).build()).execute().use { res ->
-            if (res.isSuccessful) res.body?.string()?.trim() else null
-        }
-    }.getOrNull()
 
     /** آدرس خروجی و کشور. سه‌تایی: آی‌پی، کشور، پرچم. */
     private fun lookup(client: OkHttpClient): Triple<String, String, String> {

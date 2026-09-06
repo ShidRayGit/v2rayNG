@@ -57,9 +57,7 @@ fun DonateScreen(
         Spacer(Modifier.height(24.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text(T.back, color = NaranColors.Glow)
-            }
+            BackButton(onBack)
             Spacer(Modifier.weight(1f))
             Text(T.donate, style = MaterialTheme.typography.titleLarge)
         }

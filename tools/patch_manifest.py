@@ -107,7 +107,43 @@ for name in RISKY:
     if ok:
         did.append(f"{name.rsplit('.', 1)[-1]} برداشته شد")
 
-# ── ۴. سخت‌سازی ──
+# ── ۴. آیکون دکمه‌ی کنترل‌سنتر ──
+# تایل آیکون تک‌رنگ برداری می‌خواهد؛ سیستم خودش رنگش می‌کند.
+tile_src = Path("branding/tile_icon.xml")
+if tile_src.is_file():
+    res = MANIFEST.parent / "res" / "drawable"
+    res.mkdir(parents=True, exist_ok=True)
+    (res / "ic_naran_tile.xml").write_text(
+        tile_src.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # فقط آیکون QSTileService عوض شود، نه بقیه‌ی سرویس‌ها
+    m = re.search(
+        r'(<service[^>]*android:name="\.service\.QSTileService".*?</service>|'
+        r'<service[^>]*android:name="\.service\.QSTileService"[^>]*/>)',
+        src, re.S)
+    if m:
+        block = m.group(1)
+        if 'android:icon="@drawable/ic_naran_tile"' not in block:
+            new_block, n = re.subn(
+                r'android:icon="@drawable/[\w_]+"',
+                'android:icon="@drawable/ic_naran_tile"', block)
+            if n == 0:
+                new_block = block.replace(
+                    'android:name=".service.QSTileService"',
+                    'android:name=".service.QSTileService"\n'
+                    '            android:icon="@drawable/ic_naran_tile"', 1)
+            src = src.replace(block, new_block)
+            did.append("آیکون تایل کنترل‌سنتر")
+
+    # اسمی که زیر تایل می‌آید
+    src2, n = re.subn(
+        r'(<service[^>]*android:name="\.service\.QSTileService"[^>]*?)'
+        r'android:label="[^"]*"',
+        r'\1android:label="@string/app_name"', src, flags=re.S)
+    if n:
+        src = src2
+
+# ── ۵. سخت‌سازی ──
 if 'android:allowBackup="true"' in src:
     src = src.replace('android:allowBackup="true"', 'android:allowBackup="false"')
     did.append("allowBackup خاموش شد")

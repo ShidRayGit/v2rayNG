@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  آیکون دکمه‌ی کنترل‌سنتر: حرف N.
+
+  اندروید آیکون تایل را خودش تک‌رنگ می‌کند و با تم سیستم رنگ می‌زند، پس
+  رنگ اینجا فقط برای پیش‌نمایش است و در عمل نادیده گرفته می‌شود. به همین
+  دلیل تصویر رنگی (PNG/JPG) اینجا کار نمی‌کند و باید مسیر برداری باشد.
+
+  اگر خواستید عوضش کنید، فقط pathData را تغییر دهید و همین ابعاد ۲۴×۲۴
+  را نگه دارید.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M6,19.5 L6,4.5 L18,19.5 L18,4.5" />
+</vector>

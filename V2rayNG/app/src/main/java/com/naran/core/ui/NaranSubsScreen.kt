@@ -32,6 +32,7 @@ fun SubsScreen(
     onPingAll: (Subscription) -> Unit,
     pingingId: String?
 ) {
+    val testProgress by NaranTest.progress.collectAsState()
     val subs by NaranSubs.subs.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
@@ -70,9 +71,7 @@ fun SubsScreen(
             Spacer(Modifier.height(24.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                    Text(T.back, color = NaranColors.Glow)
-                }
+                BackButton(onBack)
                 Spacer(Modifier.weight(1f))
                 Text(T.subscriptions, style = MaterialTheme.typography.titleLarge)
             }
@@ -82,7 +81,9 @@ fun SubsScreen(
             subs.forEach { sub ->
                 SubCard(
                     sub = sub,
-                    pinging = pingingId == sub.id,
+                    pinging = pingingId == sub.id && testProgress.running,
+                    progressText = if (pingingId == sub.id && testProgress.total > 0)
+                        T.pingProgress(testProgress.done, testProgress.total) else "",
                     onRefresh = {
                         scope.launch {
                             when (NaranSubs.refresh(sub.id)) {
@@ -219,6 +220,7 @@ fun SubsScreen(
 private fun SubCard(
     sub: Subscription,
     pinging: Boolean,
+    progressText: String,
     onRefresh: () -> Unit,
     onPingAll: () -> Unit,
     onToggleSort: (Boolean) -> Unit,
@@ -325,7 +327,7 @@ private fun SubCard(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmallAction(
-                if (pinging) T.searching else T.pingAll,
+                if (pinging) progressText.ifBlank { T.searching } else T.pingAll,
                 NaranColors.Cyan, Modifier.weight(1f), !pinging, onPingAll
             )
             SmallAction(T.updateNow, NaranColors.Glow, Modifier.weight(1f), true, onRefresh)

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.naran.core.NaranLog
+import com.naran.core.T
 import com.naran.core.NaranStore
 
 /**
@@ -50,18 +51,15 @@ fun LogScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("بازگشت", color = NaranColors.Glow)
-            }
+            BackButton(onBack)
             Spacer(Modifier.weight(1f))
-            Text("گزارش", style = MaterialTheme.typography.titleLarge)
+            Text(T.reportTitle, style = MaterialTheme.typography.titleLarge)
         }
 
         Spacer(Modifier.height(14.dp))
 
         Text(
-            "آدرس سرور، شناسه‌ها و کلیدها از این متن پاک می‌شوند. با این حال " +
-                "قبل از فرستادن برای کسی، یک نگاه بیندازید.",
+            T.reportNotice,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier
                 .fillMaxWidth()
@@ -83,9 +81,9 @@ fun LogScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("گزارش هسته", style = MaterialTheme.typography.titleMedium)
+                Text(T.coreLog, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "فقط برای عیب‌یابی. بعدش خاموشش کنید.",
+                    T.coreLogSub,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -94,7 +92,7 @@ fun LogScreen(onBack: () -> Unit) {
                 onCheckedChange = {
                     coreOn = it
                     NaranStore.coreLog = it
-                    NaranLog.i("گزارش", if (it) "گزارش هسته روشن شد" else "خاموش شد")
+                    NaranLog.i("گزارش", if (it) "گزارش هسته روشن شد" else "گزارش هسته خاموش شد")
                     if (it) {
                         NaranLog.captureCoreLog().forEach { line ->
                             NaranLog.i("هسته", line)
@@ -116,7 +114,7 @@ fun LogScreen(onBack: () -> Unit) {
         Box(Modifier.weight(1f)) {
             if (entries.isEmpty()) {
                 Text(
-                    "هنوز چیزی ثبت نشده",
+                    T.logEmpty,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -160,14 +158,14 @@ fun LogScreen(onBack: () -> Unit) {
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NaranColors.Raise),
                 modifier = Modifier.weight(1f)
-            ) { Text(if (copied) "کپی شد" else "کپی", color = NaranColors.Text) }
+            ) { Text(if (copied) T.copied else T.copy, color = NaranColors.Text) }
 
             Button(
                 onClick = { NaranLog.clear(); copied = false },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NaranColors.Raise),
                 modifier = Modifier.weight(1f)
-            ) { Text("پاک کردن", color = NaranColors.Muted) }
+            ) { Text(T.clear, color = NaranColors.Muted) }
         }
     }
 }

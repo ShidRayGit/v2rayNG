@@ -196,6 +196,7 @@ jobs:
           if [ "${{ github.event_name != 'workflow_dispatch' || inputs.naran }}" = "true" ]; then
             python3 tools/patch_gradle.py --deps
             python3 tools/patch_manifest.py
+            python3 tools/patch_source.py
           else
             python3 tools/patch_gradle.py
           fi

@@ -266,6 +266,10 @@ object NaranManager {
                 .map { NaranBlock.from(arr.getJSONObject(it)) }
         }
 
+        json.optJSONObject("app_flags")?.let { o ->
+            NaranStore.blockScreenshot = o.optBoolean("block_screenshot", false)
+        }
+
         json.optJSONObject("sub")?.let { o ->
             NaranSubs.updateMinutes = o.optInt("update_minutes", 60)
             NaranSubs.sortDefault = o.optBoolean("sort_default", true)

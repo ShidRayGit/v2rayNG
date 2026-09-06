@@ -48,11 +48,15 @@ class NaranActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // جلوی اسکرین‌شات و ضبط صفحه را می‌گیرد
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        // ممنوعیت اسکرین‌شات از پنل کنترل می‌شود، پیش‌فرض آزاد. چون این
+        // پرچم فقط موقع ساخته شدن پنجره اعمال می‌شود، تغییرش در پنل بعد
+        // از بستن و باز کردن اپ دیده می‌شود.
+        if (NaranStore.blockScreenshot) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
 
         // فایل‌های مسیریابی را از APK به app_assets کپی می‌کند. v2rayNG این
         // را در MainActivity انجام می‌دهد و چون آن را دور زدیم، هسته
@@ -63,6 +67,7 @@ class NaranActivity : ComponentActivity() {
 
         NaranManager.init(this, BuildConfig.VERSION_NAME)
         NaranServiceState.register(this)
+        NaranTest.register(this)
 
         setContent {
             key(langTick.value) {
@@ -83,6 +88,7 @@ class NaranActivity : ComponentActivity() {
     }.getOrDefault(true)
 
     override fun onDestroy() {
+        NaranTest.unregister()
         NaranServiceState.unregister(this)
         super.onDestroy()
     }
@@ -295,11 +301,13 @@ class NaranActivity : ComponentActivity() {
                     onBack = { showSubs = false },
                     pingingId = pingingSub,
                     onPingAll = { sub ->
-                        // تست همه فقط وقتی وصل باشیم معنی دارد
+                        // CoreTestService هر کانفیگ را مستقل بالا می‌آورد،
+                        // پس نیازی به وصل بودن نیست.
                         pingingSub = sub.id
-                        NaranServiceState.requestPingAll(this@NaranActivity)
                         scope.launch {
-                            delay(20_000)
+                            NaranTest.pingAll(this@NaranActivity, sub)
+                            // تا وقتی سرویس تمام‌شدن را اعلام کند
+                            while (NaranTest.progress.value.running) delay(500)
                             pingingSub = null
                             NaranSubs.applySort(sub.id)
                         }
@@ -307,6 +315,8 @@ class NaranActivity : ComponentActivity() {
                 )
 
                 showLicense -> LicenseScreen(
+                    canGoBack = true,
+                    onBack = { showLicense = false },
                     onActivated = { showLicense = false },
                     onOpenChannel = ::openLink
                 )
@@ -323,6 +333,7 @@ class NaranActivity : ComponentActivity() {
                     },
                     onPickServer = { showPicker = true },
                     onRefreshProbe = { lifecycleScope.launch { NaranProbe.run() } },
+                    onPing = { NaranServiceState.requestPing(this@NaranActivity) },
                     onSettings = { showSettings = true },
                     onOpenChannel = ::openLink
                 )

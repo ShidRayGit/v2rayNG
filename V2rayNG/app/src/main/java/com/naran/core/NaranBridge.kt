@@ -3,6 +3,7 @@ package com.naran.core
 import android.app.Activity
 import android.content.Context
 import android.net.VpnService
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.handler.AngConfigManager
@@ -113,6 +114,20 @@ object NaranBridge {
 
     fun stop(context: Context) {
         LauncherManager.stopService(context)
+    }
+
+    /**
+     * نمایش سرعت در نوتیفیکیشن.
+     *
+     * v2rayNG این را از قبل دارد و هر ۳ ثانیه به‌روز می‌کند؛ فقط با
+     * PREF_SPEED_ENABLED خاموش و روشن می‌شود. پس چیزی نمی‌سازیم، همان
+     * را کنترل می‌کنیم.
+     */
+    fun setSpeedNotification(enabled: Boolean) {
+        NaranStore.notifySpeed = enabled
+        runCatching {
+            MmkvManager.encodeSettings(AppConfig.PREF_SPEED_ENABLED, enabled)
+        }.onFailure { NaranLog.w("نوتیفیکیشن", "کلید سرعت نوشته نشد") }
     }
 
     fun isRunning(): Boolean =
