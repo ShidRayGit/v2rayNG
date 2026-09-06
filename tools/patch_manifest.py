@@ -65,10 +65,25 @@ if "com.naran.core.ui.NaranActivity" not in src:
 # ── ۳. صفحاتی که کانفیگ را نشان می‌دهند ──
 # حذفشان از منیفست باعث خطای کامپایل نمی‌شود، فقط از بیرون قابل باز شدن
 # نیستند. کد داخلی هم دیگر صدایشان نمی‌زند چون MainActivity باز نمی‌شود.
+# صفحاتی که یا کانفیگ خام را نشان می‌دهند یا راهی برای بیرون بردنش‌اند.
+# پیشوندی که با نقطه تمام شود، کل آن پکیج را برمی‌دارد.
+#
+# PerAppProxyActivity و AppSelection عمداً می‌مانند: خودمان از صفحه‌ی
+# «اپ‌های خارج از تونل» استفاده می‌کنیم.
 RISKY = [
-    ".ui.ScannerActivity",             # اسکن QR
-    ".ui.logcat.LogcatActivity",       # لاگ هسته — کانفیگ در آن چاپ می‌شود
-    ".ui.UrlSchemeActivity",           # ورود کانفیگ از لینک بیرونی
+    ".ui.ScannerActivity",          # اسکن QR — ورود کانفیگ کنترل‌نشده
+    ".ui.UrlSchemeActivity",        # ورود کانفیگ از لینک بیرونی
+    ".ui.AboutActivity",
+    ".ui.TranslatorsActivity",
+    ".ui.logcat.",                  # لاگ هسته، کانفیگ در آن چاپ می‌شود
+    ".ui.server.",                  # ویرایشگرهای کانفیگ — خام را نشان می‌دهند
+    ".ui.subscription.",            # کاربر می‌توانست منبع دیگری اضافه کند
+    ".ui.backup.",                  # خروجی گرفتن از کل کانفیگ‌ها
+    ".ui.userasset.",
+    ".ui.routing.",
+    ".ui.checkupdate.",
+    ".ui.shortcut.",
+    ".ui.settings.",                # تنظیمات v2rayNG، شامل سطح لاگ
 ]
 def drop_activity(text: str, name: str) -> tuple[str, bool]:
     """یک اکتیویتی را از منیفست برمی‌دارد.
@@ -102,10 +117,32 @@ def drop_activity(text: str, name: str) -> tuple[str, bool]:
     return text[:start] + text[end:], True
 
 
+def drop_matching(text: str, prefix: str) -> tuple[str, int]:
+    """همه‌ی اکتیویتی‌هایی که نامشان با این پیشوند شروع می‌شود."""
+    count = 0
+    while True:
+        m = re.search(r'android:name="(' + re.escape(prefix) + r'[\w.]*)"', text)
+        if not m:
+            break
+        text, ok = drop_activity(text, m.group(1))
+        if not ok:
+            break
+        count += 1
+    return text, count
+
+
+removed_total = 0
 for name in RISKY:
-    src, ok = drop_activity(src, name)
-    if ok:
-        did.append(f"{name.rsplit('.', 1)[-1]} برداشته شد")
+    if name.endswith("."):
+        src, n = drop_matching(src, name)
+        if n:
+            removed_total += n
+            did.append(f"{n} صفحه از {name}")
+    else:
+        src, ok = drop_activity(src, name)
+        if ok:
+            removed_total += 1
+            did.append(f"{name.rsplit('.', 1)[-1]} برداشته شد")
 
 # ── ۴. آیکون دکمه‌ی کنترل‌سنتر ──
 # تایل آیکون تک‌رنگ برداری می‌خواهد؛ سیستم خودش رنگش می‌کند.

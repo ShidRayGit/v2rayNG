@@ -47,8 +47,42 @@ for rel in ["handler/NotificationManager.kt", "service/QSTileService.kt",
             f.write_text(s, encoding="utf-8")
             done.append(f.relative_to(ROOT).as_posix())
 
+# ── نگهبان MainActivity ──
+# صفحات پرخطر از منیفست حذف می‌شوند، ولی MainActivity می‌ماند چون کدهای
+# دیگری ممکن است به آن ارجاع بدهند. اگر باز شد، فوراً به ناران می‌رود.
+# بدون این، هر مسیر ناشناخته‌ای یا رابط قدیمی را نشان می‌داد یا با
+# ActivityNotFoundException کرش می‌کرد.
+main = ROOT / "ui/main/MainActivity.kt"
+if main.is_file():
+    t = main.read_text(encoding="utf-8")
+    if "NARAN_GUARD" not in t:
+        m = re.search(r"(super\.onCreate\(savedInstanceState\)\n)", t)
+        if m:
+            # شرط روی isFinishing عمدی است: در زمان اجرا همیشه false
+            # است پس نگهبان همیشه کار می‌کند، ولی کامپایلر نمی‌تواند
+            # حلش کند — بنابراین کد بعدی «غیرقابل‌دسترس» شمرده نمی‌شود
+            # و اگر پروژه هشدار را خطا حساب کند، بیلد نمی‌شکند.
+            guard = (
+                "\n        // NARAN_GUARD — این صفحه دیگر استفاده نمی‌شود\n"
+                "        if (!isFinishing) {\n"
+                "            runCatching {\n"
+                "                startActivity(\n"
+                "                    android.content.Intent(this, "
+                'Class.forName("' + NARAN + '"))\n'
+                "                        .addFlags(android.content.Intent"
+                ".FLAG_ACTIVITY_CLEAR_TOP)\n"
+                "                )\n"
+                "            }\n"
+                "            finish()\n"
+                "            return\n"
+                "        }\n"
+            )
+            t = t[:m.end()] + guard + t[m.end():]
+            main.write_text(t, encoding="utf-8")
+            done.append("MainActivity → نگهبان تغییر مسیر")
+
 if done:
     for d in done:
-        print(f"  {d} → NaranActivity")
+        print(f"  {d}")
 else:
     print("  چیزی لازم نبود")
