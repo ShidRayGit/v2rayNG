@@ -105,6 +105,26 @@ object T {
     )
     val verifying get() = pick("Checking connection…", "در حال بررسی اتصال…")
     val refresh get() = pick("Refresh", "به‌روزرسانی")
+    val add get() = pick("Add", "افزودن")
+    val addTitle get() = pick("What do you want to add?", "چه چیزی اضافه کنیم؟")
+    val addLicense get() = pick("License code", "کد لایسنس")
+    val addLicenseSub get() = pick("The code from the channel", "کدی که در کانال است")
+    val addSubLink get() = pick("Subscription link", "لینک سابسکریپشن")
+    val addSubLinkSub get() = pick("A link from your provider", "لینکی از سرویس‌دهنده")
+    val addClipboard get() = pick("Paste a config", "چسباندن کانفیگ")
+    val addClipboardSub get() = pick(
+        "Reads a config link from the clipboard",
+        "لینک کانفیگ را از کلیپ‌بورد می‌خواند"
+    )
+    val clipboardEmpty get() = pick("Clipboard is empty", "کلیپ‌بورد خالی است")
+    val clipboardBad get() = pick(
+        "No config link found in the clipboard",
+        "لینک کانفیگی در کلیپ‌بورد نبود"
+    )
+    fun clipboardAdded(n: Any) =
+        pick("${num(n)} added", "${num(n)} کانفیگ اضافه شد")
+    val mySubs get() = pick("My subscriptions", "سابسکریپشن‌های من")
+    fun subServers(n: Any) = pick("${num(n)} servers", "${num(n)} سرور")
     val refreshing get() = pick("Refreshing…", "در حال به‌روزرسانی…")
     val refreshDone get() = pick("Up to date", "به‌روز شد")
     val notifyPermTitle get() = pick("Allow notifications?", "اعلان‌ها مجاز باشند؟")

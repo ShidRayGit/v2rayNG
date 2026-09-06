@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SubsScreen(
+    focusId: String? = null,
     onBack: () -> Unit,
     onPingAll: (Subscription) -> Unit,
     pingingId: String?
@@ -78,7 +79,11 @@ fun SubsScreen(
 
             Spacer(Modifier.height(18.dp))
 
-            subs.forEach { sub ->
+            // اگر کاربر از صفحه‌ی اصلی روی یک ساب مشخص زده، فقط همان را
+            // نشان می‌دهیم — وگرنه فهرست کامل.
+            val shown = if (focusId != null) subs.filter { it.id == focusId } else subs
+
+            shown.forEach { sub ->
                 SubCard(
                     sub = sub,
                     pinging = pingingId == sub.id && testProgress.running,
@@ -100,7 +105,7 @@ fun SubsScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            if (subs.isEmpty() && !showAdd) {
+            if (shown.isEmpty() && !showAdd) {
                 Text(
                     T.noConfigsYet,
                     style = MaterialTheme.typography.bodySmall,

@@ -5,11 +5,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.handler.MmkvManager
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 
 /**
@@ -68,11 +69,42 @@ object NaranProbe {
      * نمی‌بندد. کانفیگ‌های IPv6 هم سالم می‌مانند، چون نوع کانفیگ تعیین
      * می‌کند تونل چطور به سرور وصل شود، نه اینکه داخل تونل چه می‌رود.
      */
-    private val ipClient = tunneled.newBuilder()
-        .dns { host ->
-            val all = Dns.SYSTEM.lookup(host)
-            all.filterIsInstance<Inet4Address>().ifEmpty { all }
-        }
+    /**
+     * پورت SOCKS محلی هسته.
+     *
+     * کاربر ممکن است در تنظیمات عوضش کرده باشد، پس اول از آنجا می‌خوانیم
+     * و اگر نبود پیش‌فرض v2rayNG.
+     */
+    private fun socksPort(): Int = runCatching {
+        MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PORT)
+            ?.trim()?.toIntOrNull()
+    }.getOrNull() ?: AppConfig.PORT_SOCKS.toIntOrNull() ?: 10808
+
+    /**
+     * کلاینت جستجوی آدرس خروجی.
+     *
+     * v2rayNG اپ خودش را با addDisallowedApplication از تونل بیرون
+     * می‌گذارد — کار درستی است، وگرنه اتصال هسته به سرور هم می‌خواست از
+     * تونل رد شود و حلقه می‌ساخت. ولی یعنی هیچ درخواست معمولی از داخل
+     * اپ ما هرگز از تونل رد نمی‌شود، و برای همین همیشه آدرس واقعی
+     * کاربر برمی‌گشت.
+     *
+     * راه‌حل: از پروکسی SOCKS محلی رد می‌شویم. آن‌وقت درخواست وارد هسته
+     * می‌شود و از تونل بیرون می‌آید.
+     */
+    private fun ipClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .proxy(
+            java.net.Proxy(
+                java.net.Proxy.Type.SOCKS,
+                java.net.InetSocketAddress("127.0.0.1", socksPort())
+            )
+        )
+        // حل نام را به پروکسی بسپار، نه به سیستم. وگرنه DNS از بیرون
+        // تونل حل می‌شود و می‌تواند آدرس متفاوتی بدهد.
+        .dns(Dns.SYSTEM)
         .build()
 
     private val PROBES = listOf(
@@ -127,7 +159,10 @@ object NaranProbe {
         // بیرون بردن یک سوکت از تونل روی همه‌ی گوشی‌ها نبود، پس هر دو
         // درخواست از تونل می‌رفتند و همیشه یکی درمی‌آمدند — هشدار کاذب.
         // حالا فقط دسترسی و آدرس خروجی را نشان می‌دهیم.
-        val exit = lookup(ipClient)
+        // اگر پروکسی محلی بالا نباشد، چیزی نشان نمی‌دهیم — بهتر از
+        // نشان دادن آدرس واقعی کاربر است.
+        val exit = runCatching { lookup(ipClient()) }
+            .getOrDefault(Triple("", "", ""))
 
         _result.value = Result(
             health = Health.OK, checking = false,

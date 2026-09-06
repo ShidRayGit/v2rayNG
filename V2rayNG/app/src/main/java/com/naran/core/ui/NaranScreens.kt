@@ -178,6 +178,8 @@ fun ConnectScreen(
     onPing: () -> Boolean,
     onRefresh: () -> Unit,
     refreshing: Boolean,
+    onAdd: () -> Unit,
+    onOpenSub: (Subscription) -> Unit,
     onSettings: () -> Unit,
     onOpenChannel: (String) -> Unit
 ) {
@@ -244,7 +246,10 @@ fun ConnectScreen(
                 }
             }
 
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(14.dp))
+            AddButton(onAdd)
+
+            Spacer(Modifier.height(24.dp))
 
             PowerButton(
                 connected = connected && !probe.dead,
@@ -326,8 +331,19 @@ fun ConnectScreen(
                 }
             }
 
+            // سابسکریپشن‌ها: هرکدام یک ردیف کوچک. با زدنش صفحه‌ی جدا باز
+            // می‌شود تا صفحه‌ی اصلی شلوغ نشود.
+            val subs by NaranSubs.subs.collectAsState()
+            if (subs.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                subs.forEach { sub ->
+                    SubRow(sub) { onOpenSub(sub) }
+                    Spacer(Modifier.height(7.dp))
+                }
+            }
+
             if (connected) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
                 ProbeRow(probe, onRefreshProbe)
 
                 Spacer(Modifier.height(10.dp))
@@ -483,6 +499,103 @@ private fun ProbeRow(probe: NaranProbe.Result, onRefresh: () -> Unit) {
                 RefreshMark()
             }
         }
+    }
+}
+
+/**
+ * دکمه‌ی افزودن.
+ *
+ * بزرگ و با گرادیان، چون تنها راه ورود کاربر تازه است — کد، لینک ساب،
+ * یا کانفیگ از کلیپ‌بورد.
+ */
+@Composable
+private fun AddButton(onClick: () -> Unit) {
+    val phase = rememberNeonPhase()
+    val pulse = 0.5f + 0.5f * kotlin.math.sin(phase * 1.6).toFloat()
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        NaranColors.Glow.copy(alpha = 0.20f + pulse * 0.10f),
+                        NaranColors.Violet.copy(alpha = 0.18f + pulse * 0.08f),
+                        NaranColors.Cyan.copy(alpha = 0.14f)
+                    )
+                )
+            )
+            .border(
+                1.5.dp,
+                Brush.linearGradient(
+                    listOf(
+                        NaranColors.Glow.copy(alpha = 0.6f),
+                        NaranColors.Violet.copy(alpha = 0.5f),
+                        NaranColors.Cyan.copy(alpha = 0.45f)
+                    )
+                ),
+                RoundedCornerShape(17.dp)
+            )
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "+",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = NaranColors.Glow
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            T.add,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = NaranColors.Text
+        )
+    }
+}
+
+/** یک سابسکریپشن در صفحه‌ی اصلی — جمع‌وجور، با ورود به صفحه‌ی خودش. */
+@Composable
+private fun SubRow(sub: Subscription, onClick: () -> Unit) {
+    val left = remember(sub.expiresAt) {
+        if (sub.expiresAt <= 0) -1L
+        else (sub.expiresAt - System.currentTimeMillis() / 1000) / 86400
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(NaranColors.Surface)
+            .border(1.dp, NaranColors.Edge, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 15.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                sub.title.ifBlank { sub.domain },
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                T.subServers(sub.configs.size) +
+                    if (left >= 0) " · " + T.subExpires(left) else "",
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
+        Text(
+            if (T.isRtl) "‹" else "›",
+            color = NaranColors.Cyan,
+            fontSize = 20.sp
+        )
     }
 }
 

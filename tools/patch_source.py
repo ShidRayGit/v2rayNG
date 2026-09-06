@@ -47,6 +47,17 @@ for rel in ["handler/NotificationManager.kt", "service/QSTileService.kt",
             f.write_text(s, encoding="utf-8")
             done.append(f.relative_to(ROOT).as_posix())
 
+# ── آیکون تایل در زمان اجرا ──
+# QSTileService آیکون را با qsTile.icon بازنویسی می‌کند، پس عوض کردن
+# منیفست تنهایی کافی نیست و آیکون بعد از یک لحظه به V برمی‌گشت.
+tile = ROOT / "service/QSTileService.kt"
+if tile.is_file():
+    t = tile.read_text(encoding="utf-8")
+    if "ic_naran_tile" not in t and "ic_stat_name" in t:
+        t = t.replace("R.drawable.ic_stat_name", "R.drawable.ic_naran_tile")
+        tile.write_text(t, encoding="utf-8")
+        done.append("آیکون تایل در زمان اجرا")
+
 # ── نگهبان MainActivity ──
 # صفحات پرخطر از منیفست حذف می‌شوند، ولی MainActivity می‌ماند چون کدهای
 # دیگری ممکن است به آن ارجاع بدهند. اگر باز شد، فوراً به ناران می‌رود.

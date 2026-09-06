@@ -41,6 +41,7 @@ object NaranStore {
     private const val K_BLOCK_SHOT = "block_screenshot"
     private const val K_NOTIFY_SPEED = "notify_speed"
     private const val K_NOTIFY_ASKED = "notify_asked"
+    private const val K_MANUAL = "manual_configs"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -322,6 +323,30 @@ object NaranStore {
     var notifyAsked: Boolean
         get() = p().getBoolean(K_NOTIFY_ASKED, false)
         set(v) = p().edit().putBoolean(K_NOTIFY_ASKED, v).apply()
+
+    /**
+     * کانفیگ‌هایی که کاربر خودش از کلیپ‌بورد چسبانده.
+     *
+     * جدا از لایسنس نگه داشته می‌شوند چون انقضا ندارند و از سرور
+     * نمی‌آیند؛ فقط خود کاربر می‌تواند حذفشان کند.
+     */
+    fun manualConfigs(): List<NaranConfig> {
+        val raw = p().getString(K_MANUAL, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull {
+                runCatching { NaranConfig.from(arr.getJSONObject(it)) }.getOrNull()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveManualConfigs(list: List<NaranConfig>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it.toJson()) }
+        p().edit().putString(K_MANUAL, arr.toString()).apply()
+    }
 
     fun wipe() = p().edit().clear().apply()
 }

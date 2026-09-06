@@ -176,6 +176,13 @@ class NaranActivity : ComponentActivity() {
         }
     }
 
+    /** متن کلیپ‌بورد — برای چسباندن کانفیگ. */
+    private fun readClipboard(): String = runCatching {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE)
+            as android.content.ClipboardManager
+        cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
+    }.getOrDefault("")
+
     private fun openLink(url: String) {
         if (url.isBlank()) return
         runCatching {
@@ -201,6 +208,8 @@ class NaranActivity : ComponentActivity() {
         var searching by remember { mutableStateOf(false) }
         var pingingSub by remember { mutableStateOf<String?>(null) }
         var refreshing by remember { mutableStateOf(false) }
+        var showAdd by remember { mutableStateOf(false) }
+        var openSubId by remember { mutableStateOf<String?>(null) }
         var autoTried by remember { mutableStateOf(false) }
 
         val snackbar = remember { SnackbarHostState() }
@@ -209,7 +218,8 @@ class NaranActivity : ComponentActivity() {
         val subs by NaranSubs.subs.collectAsState()
         val notices by NaranManager.notices.collectAsState()
 
-        val own = remember(licenses) { licenses.map { it.config } }
+        val manual by NaranManager.manual.collectAsState()
+        val own = remember(licenses, manual) { licenses.map { it.config } + manual }
         // کانفیگ‌های ساب هم قابل انتخاب‌اند. شناسه‌شان از هش لینک می‌آید
         // تا با کانفیگ‌های لایسنسی برخورد نکند.
         val subConfigs = remember(subs) {
@@ -339,7 +349,8 @@ class NaranActivity : ComponentActivity() {
                 )
 
                 showSubs -> SubsScreen(
-                    onBack = { showSubs = false },
+                    focusId = openSubId,
+                    onBack = { showSubs = false; openSubId = null },
                     pingingId = pingingSub,
                     onPingAll = { sub ->
                         // CoreTestService هر کانفیگ را مستقل بالا می‌آورد،
@@ -390,6 +401,8 @@ class NaranActivity : ComponentActivity() {
                             }
                         }
                     },
+                    onAdd = { showAdd = true },
+                    onOpenSub = { openSubId = it.id; showSubs = true },
                     onSettings = { showSettings = true },
                     onOpenChannel = ::openLink
                 )
@@ -398,6 +411,35 @@ class NaranActivity : ComponentActivity() {
             // اطلاعیه‌ها روی همه‌چیز
             notices.firstOrNull()?.let { n ->
                 NoticeDialog(n) { NaranManager.dismissNotice(n.id) }
+            }
+
+            if (showAdd) {
+                ModalBottomSheet(
+                    onDismissRequest = { showAdd = false },
+                    sheetState = rememberModalBottomSheetState(true),
+                    containerColor = NaranColors.Surface
+                ) {
+                    AddSheet(
+                        onLicense = { showAdd = false; showLicense = true },
+                        onSubscription = { showAdd = false; showSubs = true },
+                        onClipboard = {
+                            showAdd = false
+                            val text = readClipboard()
+                            when {
+                                text.isBlank() ->
+                                    scope.launch { snackbar.showSnackbar(T.clipboardEmpty) }
+                                else -> {
+                                    val n = NaranManager.addManual(text)
+                                    scope.launch {
+                                        snackbar.showSnackbar(
+                                            if (n > 0) T.clipboardAdded(n) else T.clipboardBad
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             if (showPicker) {

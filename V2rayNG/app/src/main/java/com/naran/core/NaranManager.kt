@@ -48,6 +48,7 @@ object NaranManager {
         appVersion = versionName
         _ads.value = NaranStore.ads()
         NaranSubs.load()
+        reloadManual()
         refreshLocal()
         refreshPublic()
     }
@@ -116,8 +117,56 @@ object NaranManager {
         return maxOf(0L, minOf(wallLeft, bootLeft))
     }
 
-    /** کانفیگ‌های شخصی کاربر — از کدهایی که وارد کرده. */
-    fun activeConfigs(): List<NaranConfig> = _licenses.value.map { it.config }
+    private val _manual = MutableStateFlow<List<NaranConfig>>(emptyList())
+    val manual: StateFlow<List<NaranConfig>> = _manual
+
+    fun reloadManual() { _manual.value = NaranStore.manualConfigs() }
+
+    /**
+     * افزودن کانفیگ از متن — مثلاً از کلیپ‌بورد.
+     *
+     * چند خط را با هم می‌پذیرد و تکراری‌ها را کنار می‌گذارد.
+     * برمی‌گرداند: چند تا واقعاً اضافه شد.
+     */
+    fun addManual(text: String): Int {
+        val lines = text.lines()
+            .map { it.trim() }
+            .filter { it.contains("://") && it.length > 12 }
+        if (lines.isEmpty()) return 0
+
+        val existing = NaranStore.manualConfigs()
+        val known = existing.map { it.raw }.toSet()
+        val fresh = lines.filterNot { it in known }.mapIndexed { i, raw ->
+            val tag = raw.substringAfterLast("#", "").let {
+                runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
+            }
+            NaranConfig(
+                // فضای شناسه‌ی جدا، تا با لایسنس و ساب برخورد نکند
+                id = 800_000 + Math.abs(raw.hashCode() % 90_000) + i,
+                name = tag.ifBlank { raw.substringAfter("://").take(16) },
+                location = "", flag = "",
+                protocol = raw.substringBefore("://"),
+                raw = raw
+            )
+        }
+        if (fresh.isEmpty()) return 0
+
+        NaranStore.saveManualConfigs(existing + fresh)
+        reloadManual()
+        NaranLog.i("کانفیگ", fresh.size.toString() + " کانفیگ دستی اضافه شد")
+        return fresh.size
+    }
+
+    fun removeManual(configId: Int) {
+        NaranStore.saveManualConfigs(
+            NaranStore.manualConfigs().filterNot { it.id == configId }
+        )
+        reloadManual()
+    }
+
+    /** کانفیگ‌های شخصی کاربر — از کدها و آنچه خودش چسبانده. */
+    fun activeConfigs(): List<NaranConfig> =
+        _licenses.value.map { it.config } + _manual.value
 
     /** همه‌ی آنچه کاربر می‌تواند به آن وصل شود، شخصی و عمومی. */
     fun allConnectable(): List<NaranConfig> =
