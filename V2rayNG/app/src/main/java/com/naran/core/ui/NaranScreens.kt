@@ -82,7 +82,13 @@ fun LicenseScreen(
             Lamp(big = true)
             Spacer(Modifier.height(20.dp))
 
-            Text(T.appName, style = MaterialTheme.typography.displayLarge.copy(fontSize = 32.sp))
+            Text(
+                T.appName,
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 32.sp,
+                    brush = NaranColors.textHot
+                )
+            )
             Spacer(Modifier.height(8.dp))
             Text(
                 T.licenseSub(channelName),
@@ -214,7 +220,12 @@ fun ConnectScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Lamp()
                     Spacer(Modifier.width(10.dp))
-                    Text(T.appName, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        T.appName,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            brush = NaranColors.textTitle
+                        )
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     lic?.let {
@@ -621,7 +632,12 @@ fun ServerSheet(
             .background(NaranColors.Surface)
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        Text(T.servers, style = MaterialTheme.typography.titleLarge)
+        Text(
+            T.servers,
+            style = MaterialTheme.typography.titleLarge.copy(
+                brush = NaranColors.textTitle
+            )
+        )
         Spacer(Modifier.height(14.dp))
 
         LazyColumn(
@@ -830,7 +846,12 @@ private fun ServerRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${c.flag} ${c.name}", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${c.flag} ${c.name}",
+                style = if (selected)
+                    MaterialTheme.typography.titleMedium.copy(brush = NaranColors.textHot)
+                else MaterialTheme.typography.titleMedium
+            )
             Text(
                 badge ?: c.location.ifBlank { c.protocol },
                 style = MaterialTheme.typography.bodySmall

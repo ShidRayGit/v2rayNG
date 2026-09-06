@@ -59,7 +59,12 @@ fun DonateScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
             Spacer(Modifier.weight(1f))
-            Text(T.donate, style = MaterialTheme.typography.titleLarge)
+            Text(
+                T.donate,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    brush = NaranColors.textTitle
+                )
+            )
         }
 
         Spacer(Modifier.height(10.dp))

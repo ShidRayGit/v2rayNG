@@ -59,7 +59,12 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 Spacer(Modifier.weight(1f))
-                Text(T.settings, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    T.settings,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        brush = NaranColors.textTitle
+                    )
+                )
             }
 
             Spacer(Modifier.height(22.dp))

@@ -78,7 +78,9 @@ fun SubDetailScreen(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         sub.title.ifBlank { sub.domain },
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            brush = NaranColors.textTitle
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -246,9 +248,15 @@ private fun ConfigRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
+            // انتخاب‌شده گرادیان گرم می‌گیرد تا در فهرست بلند فوری پیدا
+            // شود؛ بقیه روشن و یکدست می‌مانند تا صفحه شلوغ نشود.
             Text(
                 config.name,
-                style = MaterialTheme.typography.titleMedium,
+                style = if (selected)
+                    MaterialTheme.typography.titleMedium.copy(
+                        brush = NaranColors.textHot
+                    )
+                else MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

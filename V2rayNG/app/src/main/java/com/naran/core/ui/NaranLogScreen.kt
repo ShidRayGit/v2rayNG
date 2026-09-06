@@ -53,7 +53,12 @@ fun LogScreen(onBack: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
             Spacer(Modifier.weight(1f))
-            Text(T.reportTitle, style = MaterialTheme.typography.titleLarge)
+            Text(
+                T.reportTitle,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    brush = NaranColors.textTitle
+                )
+            )
         }
 
         Spacer(Modifier.height(14.dp))

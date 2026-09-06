@@ -119,6 +119,12 @@ object NaranColors {
 
     /** دکمه‌ی برجسته‌ی ثانویه — بنفش به فیروزه‌ای. */
     val accentCool = Brush.linearGradient(listOf(Violet, Cyan))
+
+    /** اسم سرور انتخاب‌شده — گرم و روشن. */
+    val textHot = Brush.linearGradient(listOf(Glow, GlowHot, Violet))
+
+    /** عنوان صفحات. */
+    val textTitle = Brush.linearGradient(listOf(Text, Cyan))
 }
 
 private val Scheme = darkColorScheme(
@@ -135,13 +141,32 @@ private val Scheme = darkColorScheme(
     error = NaranColors.Dead
 )
 
+/**
+ * سبک‌های متن.
+ *
+ * رنگ همه‌جا صریح داده می‌شود. بدون آن، متنی که داخل Box یا Row ساده
+ * باشد — نه Surface — از LocalContentColor ارث نمی‌برد و Compose به
+ * سیاهِ پیش‌فرض می‌افتد. روی پس‌زمینه‌ی تیره یعنی نامرئی.
+ */
 private val NaranType = Typography(
-    displayLarge = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Bold),
-    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 25.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 23.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, color = NaranColors.Muted, lineHeight = 21.sp)
+    displayLarge = TextStyle(
+        fontSize = 40.sp, fontWeight = FontWeight.Bold, color = NaranColors.Text
+    ),
+    titleLarge = TextStyle(
+        fontSize = 19.sp, fontWeight = FontWeight.Bold, color = NaranColors.Text
+    ),
+    titleMedium = TextStyle(
+        fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = NaranColors.Text
+    ),
+    bodyLarge = TextStyle(
+        fontSize = 15.sp, lineHeight = 25.sp, color = NaranColors.Text
+    ),
+    bodyMedium = TextStyle(
+        fontSize = 14.sp, lineHeight = 23.sp, color = NaranColors.Text
+    ),
+    bodySmall = TextStyle(
+        fontSize = 13.sp, color = NaranColors.Muted, lineHeight = 21.sp
+    )
 )
 
 /**

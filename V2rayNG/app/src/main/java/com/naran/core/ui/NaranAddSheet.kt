@@ -35,7 +35,12 @@ fun AddSheet(
             .background(NaranColors.Surface)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        Text(T.addTitle, style = MaterialTheme.typography.titleLarge)
+        Text(
+            T.addTitle,
+            style = MaterialTheme.typography.titleLarge.copy(
+                brush = NaranColors.textTitle
+            )
+        )
         Spacer(Modifier.height(16.dp))
 
         Choice("＃", T.addLicense, T.addLicenseSub, NaranColors.Glow, onLicense)

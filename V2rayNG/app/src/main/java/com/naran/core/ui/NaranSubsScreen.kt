@@ -74,7 +74,12 @@ fun SubsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 Spacer(Modifier.weight(1f))
-                Text(T.subscriptions, style = MaterialTheme.typography.titleLarge)
+                Text(
+                T.subscriptions,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    brush = NaranColors.textTitle
+                )
+            )
             }
 
             Spacer(Modifier.height(18.dp))
