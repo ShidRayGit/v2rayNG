@@ -146,12 +146,16 @@ for name in RISKY:
 
 # ── ۴. آیکون دکمه‌ی کنترل‌سنتر ──
 # تایل آیکون تک‌رنگ برداری می‌خواهد؛ سیستم خودش رنگش می‌کند.
+res = MANIFEST.parent / "res" / "drawable"
+for src_name, out_name in [("branding/tile_icon.xml", "ic_naran_tile.xml"),
+                           ("branding/stat_icon.xml", "ic_naran_stat.xml")]:
+    f = Path(src_name)
+    if f.is_file():
+        res.mkdir(parents=True, exist_ok=True)
+        (res / out_name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+
 tile_src = Path("branding/tile_icon.xml")
 if tile_src.is_file():
-    res = MANIFEST.parent / "res" / "drawable"
-    res.mkdir(parents=True, exist_ok=True)
-    (res / "ic_naran_tile.xml").write_text(
-        tile_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     # فقط آیکون QSTileService عوض شود، نه بقیه‌ی سرویس‌ها
     m = re.search(

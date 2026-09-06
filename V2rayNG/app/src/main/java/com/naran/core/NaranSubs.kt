@@ -76,6 +76,24 @@ data class Subscription(
     }
 }
 
+/**
+ * شناسه‌ی پایدار یک کانفیگ ساب.
+ *
+ * از هش لینک و شناسه‌ی ساب ساخته می‌شود تا بین اجراها ثابت بماند و با
+ * کانفیگ‌های لایسنسی و دستی برخورد نکند.
+ */
+fun Subscription.configId(c: SubConfig): Int =
+    700_000 + Math.abs((id + c.raw).hashCode() % 200_000)
+
+fun Subscription.toConfig(c: SubConfig): NaranConfig = NaranConfig(
+    id = configId(c),
+    name = c.name,
+    location = title.ifBlank { domain },
+    flag = "",
+    protocol = c.raw.substringBefore("://"),
+    raw = c.raw
+)
+
 sealed class SubResult {
     data class Ok(val sub: Subscription) : SubResult()
     data class NotAllowed(val domain: String, val allowed: List<String>) : SubResult()

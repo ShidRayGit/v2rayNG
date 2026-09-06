@@ -331,19 +331,10 @@ fun ConnectScreen(
                 }
             }
 
-            // سابسکریپشن‌ها: هرکدام یک ردیف کوچک. با زدنش صفحه‌ی جدا باز
-            // می‌شود تا صفحه‌ی اصلی شلوغ نشود.
             val subs by NaranSubs.subs.collectAsState()
-            if (subs.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                subs.forEach { sub ->
-                    SubRow(sub) { onOpenSub(sub) }
-                    Spacer(Modifier.height(7.dp))
-                }
-            }
 
             if (connected) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(12.dp))
                 ProbeRow(probe, onRefreshProbe)
 
                 Spacer(Modifier.height(10.dp))
@@ -365,6 +356,16 @@ fun ConnectScreen(
                     )
                     Metric(T.duration, NaranTraffic.duration(traffic.elapsedMs),
                         NaranColors.Muted, Modifier.weight(1f))
+                }
+            }
+
+            // سابسکریپشن‌ها: هرکدام یک ردیف کوچک که صفحه‌ی خودش را باز
+            // می‌کند. بعد از اتصال زیر آمار می‌نشیند، چون آن‌ها مهم‌ترند.
+            if (subs.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                subs.forEach { sub ->
+                    SubRow(sub) { onOpenSub(sub) }
+                    Spacer(Modifier.height(7.dp))
                 }
             }
 

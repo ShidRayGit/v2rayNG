@@ -124,6 +124,14 @@ object T {
     fun clipboardAdded(n: Any) =
         pick("${num(n)} added", "${num(n)} کانفیگ اضافه شد")
     val mySubs get() = pick("My subscriptions", "سابسکریپشن‌های من")
+    val connectNow get() = pick("Connect", "اتصال")
+    val selected get() = pick("Selected", "انتخاب شد")
+    val manage get() = pick("Manage", "مدیریت")
+    val untested get() = pick("not tested", "تست نشده")
+    val noConfigsInSub get() = pick(
+        "This subscription has no servers yet",
+        "این ساب هنوز سروری ندارد"
+    )
     fun subServers(n: Any) = pick("${num(n)} servers", "${num(n)} سرور")
     val refreshing get() = pick("Refreshing…", "در حال به‌روزرسانی…")
     val refreshDone get() = pick("Up to date", "به‌روز شد")

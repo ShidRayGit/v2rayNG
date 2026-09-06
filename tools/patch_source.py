@@ -58,6 +58,40 @@ if tile.is_file():
         tile.write_text(t, encoding="utf-8")
         done.append("آیکون تایل در زمان اجرا")
 
+# ── آیکون نوار وضعیت ──
+# NotificationManager آیکون نوتیفیکیشن را از ic_stat_name می‌گیرد. اگر
+# عوضش نکنیم، در نوار وضعیت و نوتیفیکیشن همچنان V دیده می‌شود.
+notif = ROOT / "handler/NotificationManager.kt"
+if notif.is_file():
+    t = notif.read_text(encoding="utf-8")
+    if "ic_naran_stat" not in t:
+        t2 = t.replace("R.drawable.ic_stat_name", "R.drawable.ic_naran_stat")
+        if t2 != t:
+            notif.write_text(t2, encoding="utf-8")
+            done.append("آیکون نوار وضعیت")
+
+# ── متن سرعت در نوتیفیکیشن ──
+# پیش‌فرض v2rayNG سرعت proxy و direct را جدا و با تب می‌نویسد، که برای
+# کاربر معنی ندارد. یک خط ساده جایش می‌گذاریم.
+if notif.is_file():
+    t = notif.read_text(encoding="utf-8")
+    if "NARAN_SPEED" not in t and "appendSpeedString(" in t:
+        old = t[t.index("            val text = StringBuilder()"):
+                t.index("            updateNotification(text.toString()")]
+        new = (
+            "            // NARAN_SPEED — یک خط ساده به‌جای دو خط تفکیکی\n"
+            "            val text = StringBuilder()\n"
+            "            text.append(\n"
+            "                \"↓ \" + (proxyDownlink / sinceLastQueryInSeconds)\n"
+            "                    .toLong().toSpeedString() +\n"
+            "                \"   ↑ \" + (proxyUplink / sinceLastQueryInSeconds)\n"
+            "                    .toLong().toSpeedString()\n"
+            "            )\n"
+        )
+        t = t.replace(old, new)
+        notif.write_text(t, encoding="utf-8")
+        done.append("متن سرعت ساده شد")
+
 # ── نگهبان MainActivity ──
 # صفحات پرخطر از منیفست حذف می‌شوند، ولی MainActivity می‌ماند چون کدهای
 # دیگری ممکن است به آن ارجاع بدهند. اگر باز شد، فوراً به ناران می‌رود.

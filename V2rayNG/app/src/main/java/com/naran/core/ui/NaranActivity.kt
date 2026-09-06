@@ -223,17 +223,7 @@ class NaranActivity : ComponentActivity() {
         // کانفیگ‌های ساب هم قابل انتخاب‌اند. شناسه‌شان از هش لینک می‌آید
         // تا با کانفیگ‌های لایسنسی برخورد نکند.
         val subConfigs = remember(subs) {
-            subs.flatMap { s ->
-                s.configs.map { c ->
-                    NaranConfig(
-                        id = 700_000 + Math.abs((s.id + c.raw).hashCode() % 200_000),
-                        name = c.name,
-                        location = s.title.ifBlank { s.domain },
-                        flag = "", protocol = c.raw.substringBefore("://"),
-                        raw = c.raw
-                    )
-                }
-            }
+            subs.flatMap { sub -> sub.configs.map { sub.toConfig(it) } }
         }
         val all = remember(own, publics, subConfigs) {
             own + subConfigs + publics.map { it.config }
@@ -348,9 +338,54 @@ class NaranActivity : ComponentActivity() {
                     onLanguageChanged = { langTick.value++ }
                 )
 
+                // اگر روی یک ساب مشخص زده شده، فهرست کانفیگ‌هایش باز شود
+                openSubId != null -> {
+                    val sub = subs.firstOrNull { it.id == openSubId }
+                    if (sub == null) {
+                        openSubId = null
+                    } else {
+                        SubDetailScreen(
+                            sub = sub,
+                            selectedId = selected?.id,
+                            onBack = { openSubId = null; showSubs = false },
+                            onPingAll = {
+                                pingingSub = sub.id
+                                scope.launch {
+                                    NaranTest.pingAll(this@NaranActivity, sub)
+                                    while (NaranTest.progress.value.running) delay(500)
+                                    pingingSub = null
+                                    NaranSubs.applySort(sub.id)
+                                }
+                            },
+                            onToggleSort = { NaranSubs.setSort(sub.id, it) },
+                            onRefresh = {
+                                scope.launch {
+                                    NaranSubs.refresh(sub.id)
+                                    snackbar.showSnackbar(T.updated)
+                                }
+                            },
+                            onDelete = {
+                                NaranSubs.remove(sub.id)
+                                openSubId = null; showSubs = false
+                            },
+                            onSelect = {
+                                selected = it
+                                NaranStore.lastServer = it.id
+                            },
+                            onConnect = {
+                                selected = it
+                                NaranStore.lastServer = it.id
+                                openSubId = null; showSubs = false
+                                if (running) disconnect()
+                                connect(it)
+                            }
+                        )
+                    }
+                }
+
                 showSubs -> SubsScreen(
-                    focusId = openSubId,
-                    onBack = { showSubs = false; openSubId = null },
+                    focusId = null,
+                    onBack = { showSubs = false },
                     pingingId = pingingSub,
                     onPingAll = { sub ->
                         // CoreTestService هر کانفیگ را مستقل بالا می‌آورد،
