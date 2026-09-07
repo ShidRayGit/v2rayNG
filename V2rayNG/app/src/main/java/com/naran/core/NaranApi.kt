@@ -2,6 +2,8 @@ package com.naran.core
 
 import kotlinx.coroutines.*
 import okhttp3.*
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.handler.MmkvManager
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -25,21 +27,56 @@ object NaranApi {
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
-            // بیرون از تونل. اگر از تونل می‌رفت، پنلِ روی خاک ایران از
-            // دید سرور خارجی دور یا غیرقابل دسترس می‌شد.
-            .socketFactory(NaranDirect.socketFactory)
-            .dns { hostname -> NaranDirect.resolve(hostname) }
+            // مسیر عادی سیستم. قبلاً اینجا سوکت را عمداً به شبکه‌ی زیرین
+            // می‌بستیم تا از تونل بیرون برود — آن تصمیم برای وقتی بود که
+            // پنل روی خاک ایران بود. حالا که پنل خارج است، آن کار باعث
+            // می‌شد وقتی هر VPNای روشن باشد درخواست از کنارش رد شود و
+            // به فیلترینگ بخورد.
             // در نسخه‌ی نهایی pinning را روشن کنید — راهنما در PATCHES.md
             // .certificatePinner(NaranPinning.pinner())
             .build()
     }
+
+    /**
+     * پورت SOCKS محلی هسته. کاربر ممکن است عوضش کرده باشد.
+     */
+    private fun socksPort(): Int = runCatching {
+        MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PORT)?.trim()?.toIntOrNull()
+    }.getOrNull() ?: AppConfig.PORT_SOCKS.toIntOrNull() ?: 10808
+
+    /**
+     * کلاینت پشتیبان: از پروکسی محلی، یعنی از داخل تونل.
+     *
+     * v2rayNG اپ خودش را با addDisallowedApplication از تونل بیرون
+     * می‌گذارد. وقتی تونل روشن است و مسیر مستقیم به پنل نمی‌رسد — که در
+     * ایران زیاد پیش می‌آید — این تنها راه رسیدن است.
+     *
+     * هر بار ساخته می‌شود چون پورت ممکن است بین اجراها فرق کند.
+     */
+    private fun tunnelClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
+        .writeTimeout(12, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .proxy(
+            java.net.Proxy(
+                java.net.Proxy.Type.SOCKS,
+                java.net.InetSocketAddress("127.0.0.1", socksPort())
+            )
+        )
+        .build()
 
     class ApiError(val kind: Kind, message: String) : Exception(message) {
         enum class Kind { NETWORK, SIGNATURE, RATE_LIMIT, SERVER }
     }
 
     /** POST امضاشده به یک اندپوینت مشخص. */
-    private suspend fun postTo(base: String, path: String, body: JSONObject): JSONObject =
+    private suspend fun postTo(
+        base: String,
+        path: String,
+        body: JSONObject,
+        http: OkHttpClient
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             val bytes = body.toString().toByteArray(Charsets.UTF_8)
             val ts = (System.currentTimeMillis() / 1000).toString()
@@ -53,7 +90,7 @@ object NaranApi {
                 .post(bytes.toRequestBody(JSON))
                 .build()
 
-            client.newCall(req).execute().use { res ->
+            http.newCall(req).execute().use { res ->
                 val text = res.body?.string().orEmpty()
                 when (res.code) {
                     200 -> JSONObject(text)
@@ -74,13 +111,39 @@ object NaranApi {
         body: JSONObject,
         endpoints: List<NaranEndpoint>,
         configOnly: Boolean = false
-    ): Pair<JSONObject, String> = coroutineScope {
+    ): Pair<JSONObject, String> {
         val pool = endpoints
             .filter { !configOnly || it.servesConfigs }
             .sortedBy { it.priority }
 
         if (pool.isEmpty()) throw ApiError(ApiError.Kind.NETWORK, "آدرسی برای اتصال نیست")
 
+        // اول مسیر عادی
+        val direct = runCatching { raceWith(pool, path, body, client) }
+        direct.getOrNull()?.let { return it }
+
+        // اگر نشد و تونل خودمان بالاست، از پروکسی محلی. لازم است چون
+        // v2rayNG اپ ما را از تونل بیرون می‌گذارد و مسیر عادی ممکن است
+        // به پنل نرسد.
+        if (NaranServiceState.state.value == NaranServiceState.State.ON) {
+            val viaTunnel = runCatching { raceWith(pool, path, body, tunnelClient()) }
+            viaTunnel.getOrNull()?.let {
+                NaranLog.i("شبکه", "از پروکسی محلی رد شد")
+                return it
+            }
+        }
+
+        throw direct.exceptionOrNull() as? Exception
+            ?: ApiError(ApiError.Kind.NETWORK, "هیچ سروری جواب نداد")
+    }
+
+    /** یک دور روی همه‌ی اندپوینت‌ها با کلاینت داده‌شده. */
+    private suspend fun raceWith(
+        pool: List<NaranEndpoint>,
+        path: String,
+        body: JSONObject,
+        http: OkHttpClient
+    ): Pair<JSONObject, String> = coroutineScope {
         val result = CompletableDeferred<Pair<JSONObject, String>>()
         val failures = java.util.concurrent.atomic.AtomicInteger(0)
         val lastError = java.util.concurrent.atomic.AtomicReference<Exception>(null)
@@ -91,7 +154,7 @@ object NaranApi {
                 delay(index * 120L)
                 if (result.isCompleted) return@launch
                 try {
-                    val json = postTo(ep.url, path, body)
+                    val json = postTo(ep.url, path, body, http)
                     result.complete(json to ep.url)
                 } catch (e: Exception) {
                     lastError.set(e)

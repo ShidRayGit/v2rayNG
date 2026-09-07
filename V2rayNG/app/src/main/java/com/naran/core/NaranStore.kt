@@ -42,6 +42,7 @@ object NaranStore {
     private const val K_NOTIFY_SPEED = "notify_speed"
     private const val K_NOTIFY_ASKED = "notify_asked"
     private const val K_MANUAL = "manual_configs"
+    private const val K_SKIP_VER = "skipped_version"
 
     @Volatile private var prefs: SharedPreferences? = null
 
@@ -347,6 +348,11 @@ object NaranStore {
         list.forEach { arr.put(it.toJson()) }
         p().edit().putString(K_MANUAL, arr.toString()).apply()
     }
+
+    /** نسخه‌ای که کاربر «بعداً» زده؛ دوباره نپرسیم. */
+    var skippedVersion: Int
+        get() = p().getInt(K_SKIP_VER, 0)
+        set(v) = p().edit().putInt(K_SKIP_VER, v).apply()
 
     fun wipe() = p().edit().clear().apply()
 }

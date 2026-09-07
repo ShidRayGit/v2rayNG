@@ -275,6 +275,18 @@ object T {
     val currentVersion get() = pick("Current version", "نسخه فعلی")
     fun updateReady(v: String) = pick("Version $v is out", "نسخه‌ی $v آمده")
     val tapToGet get() = pick("Tap to download", "برای دریافت بزنید")
+    val getUpdate get() = pick("Update", "دریافت آپدیت")
+    val later get() = pick("Later", "بعداً")
+    val openInBrowser get() = pick("Open in browser", "باز کردن در مرورگر")
+    fun downloading(p: Any) = pick("Downloading ${num(p)}%", "در حال دریافت ${num(p)}٪")
+    val updateNotApk get() = pick(
+        "That link isn't a direct APK",
+        "این لینک مستقیم به فایل نمی‌رسد"
+    )
+    val installPermNeeded get() = pick(
+        "Allow installing from Naran, then tap Update again",
+        "اجازه‌ی نصب از ناران را بدهید و دوباره بزنید"
+    )
     val report get() = pick("Diagnostics", "گزارش")
     val reportSub get() = pick("For when something doesn't work", "برای وقتی چیزی کار نمی‌کند")
 

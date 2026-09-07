@@ -41,7 +41,6 @@ object NaranManager {
 
     fun init(ctx: Context, versionName: String) {
         NaranStore.init(ctx)
-        NaranDirect.init(ctx)
         T.init(ctx)
         // پیش‌فرض ناران روشن است؛ کلید v2rayNG را با آن هماهنگ می‌کنیم
         NaranBridge.setSpeedNotification(NaranStore.notifySpeed)

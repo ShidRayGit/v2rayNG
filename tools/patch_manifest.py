@@ -194,6 +194,43 @@ if "POST_NOTIFICATIONS" not in src:
         ) + src[m.end():]
         did.append("مجوز اعلان")
 
+# ── آپدیت درون‌برنامه‌ای ──
+# نصب APK دو چیز لازم دارد: مجوز، و یک FileProvider برای دادن فایل به
+# نصاب سیستم. بدون provider، اندروید ۷ به بعد فایل را نمی‌پذیرد.
+if "REQUEST_INSTALL_PACKAGES" not in src:
+    m = re.search(r"(<manifest[^>]*>)", src)
+    if m:
+        src = src[:m.end()] + (
+            '\n    <uses-permission '
+            'android:name="android.permission.REQUEST_INSTALL_PACKAGES" />'
+        ) + src[m.end():]
+        did.append("مجوز نصب آپدیت")
+
+if "naranprovider" not in src:
+    xml_dir = MANIFEST.parent / "res" / "xml"
+    xml_dir.mkdir(parents=True, exist_ok=True)
+    (xml_dir / "naran_paths.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<paths>\n'
+        '    <cache-path name="naran_updates" path="updates/" />\n'
+        '</paths>\n', encoding="utf-8")
+
+    entry = '''
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.naranprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/naran_paths" />
+        </provider>
+'''
+    m = re.search(r"(<application\b[^>]*>)", src)
+    if m:
+        src = src[:m.end()] + entry + src[m.end():]
+        did.append("FileProvider آپدیت")
+
 # ── ۵. سخت‌سازی ──
 if 'android:allowBackup="true"' in src:
     src = src.replace('android:allowBackup="true"', 'android:allowBackup="false"')

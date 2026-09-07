@@ -210,6 +210,7 @@ class NaranActivity : ComponentActivity() {
         var refreshing by remember { mutableStateOf(false) }
         var showAdd by remember { mutableStateOf(false) }
         var openSubId by remember { mutableStateOf<String?>(null) }
+        var updateShown by remember { mutableStateOf(false) }
         var autoTried by remember { mutableStateOf(false) }
 
         val snackbar = remember { SnackbarHostState() }
@@ -440,6 +441,52 @@ class NaranActivity : ComponentActivity() {
                     onOpenSub = { openSubId = it.id; showSubs = true },
                     onSettings = { showSettings = true },
                     onOpenChannel = ::openLink
+                )
+            }
+
+            // آپدیت، هنگام باز شدن اپ. اجباری‌ها رد نمی‌شوند.
+            val update = NaranManager.updateAvailable(BuildConfig.VERSION_CODE)
+            if (update != null && !updateShown &&
+                (update.mandatory || update.versionCode != NaranStore.skippedVersion)
+            ) {
+                UpdateDialog(
+                    release = update,
+                    onDismiss = {
+                        NaranStore.skippedVersion = update.versionCode
+                        updateShown = true
+                        NaranUpdate.reset()
+                    },
+                    onDownload = {
+                        val st = NaranUpdate.state.value
+                        when {
+                            // دانلود تمام شده — برو نصب
+                            st is NaranUpdate.State.Ready ->
+                                if (!NaranUpdate.install(this@NaranActivity, st.file)) {
+                                    scope.launch {
+                                        snackbar.showSnackbar(T.installPermNeeded)
+                                    }
+                                }
+
+                            // لینک مستقیم نیست یا قبلاً شکست خورده — مرورگر
+                            st is NaranUpdate.State.Failed ||
+                                !NaranUpdate.isDirectApk(update.apkUrl) -> {
+                                openLink(update.apkUrl)
+                                updateShown = true
+                            }
+
+                            else -> scope.launch {
+                                val f = NaranUpdate.download(
+                                    this@NaranActivity, update.apkUrl
+                                )
+                                if (f != null &&
+                                    !NaranUpdate.install(this@NaranActivity, f)
+                                ) {
+                                    snackbar.showSnackbar(T.installPermNeeded)
+                                }
+                            }
+                        }
+                    },
+                    onOpenLink = { openLink(update.apkUrl); updateShown = true }
                 )
             }
 
